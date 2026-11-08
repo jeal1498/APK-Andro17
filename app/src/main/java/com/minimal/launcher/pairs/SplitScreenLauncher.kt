@@ -51,15 +51,11 @@ class SplitScreenLauncher(
                 waited += POLL_MS
             }
             delay(POLL_MS)
-            var active = service.isSplitScreenActive() == true
-            var attempt = 0
-            while (!active && attempt < 3) {
-                attempt++
+            // Single toggle only: a second one would hit the recents/home window and show an error.
+            if (service.isSplitScreenActive() != true) {
                 service.toggleSplitScreen()
                 delay(FOCUS_MS)
-                active = service.isSplitScreenActive() == true
             }
-            if (!active) Log.w(TAG, "split divider not detected after $attempt attempts; launching B adjacent anyway")
             startAdjacent(service, b)
             if (third != null) {
                 delay(STEP_MS)
