@@ -73,6 +73,40 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         FrequentApps.select(usage, s.pinnedFrequent, byKey.keys, s.frequentCount, System.currentTimeMillis()).mapNotNull { byKey[it] }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    private val minuteTicker = kotlinx.coroutines.flow.flow {
+        while (true) { emit(System.currentTimeMillis()); kotlinx.coroutines.delay(60_000) }
+    }
+
+    /** "Sugeridas" for this time slot / day type and the current context (headphones, car). */
+    val suggestedApps: StateFlow<List<AppInfo>> = combine(
+        combine(visibleApps, categories) { apps, cats -> apps to cats },
+        container.usage.usage,
+        container.settings.settings,
+        container.deviceContext.state,
+        combine(minuteTicker, frequentApps) { now, freq -> now to freq },
+    ) { (apps, cats), usage, s, ctx, (now, frequent) ->
+        if (!s.showSuggestions) return@combine emptyList()
+        val byKey = apps.associateBy { it.key }
+        val driving = cats.firstOrNull { it.builtinKey == com.minimal.launcher.categories.BuiltinCategory.DRIVING.key }?.apps.orEmpty().mapTo(HashSet()) { it.key }
+        val (slot, day) = com.minimal.launcher.usage.TimeSlots.of(now)
+        com.minimal.launcher.usage.Suggestions.select(
+            usage, now, slot, day,
+            available = byKey.keys,
+            dismissed = s.dismissedSuggestions,
+            exclude = frequent.mapTo(HashSet()) { it.key },
+            context = ctx,
+            musicApps = apps.filter(com.minimal.launcher.usage.Suggestions::isMusicApp).map { it.key },
+            carApps = apps.filter { com.minimal.launcher.usage.Suggestions.isCarApp(it, driving) }.map { it.key },
+        ).mapNotNull { byKey[it] }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Long-press → "No sugerir en este horario". */
+    fun dismissSuggestion(appKey: String) = viewModelScope.launch {
+        val (slot, day) = com.minimal.launcher.usage.TimeSlots.of(System.currentTimeMillis())
+        container.settings.dismissSuggestion(com.minimal.launcher.usage.Suggestions.dismissKey(appKey, slot, com.minimal.launcher.usage.TimeSlots.isWeekend(day)))
+        _messages.tryEmit("No se sugerirá en este horario")
+    }
+
     val homeItems: StateFlow<List<HomeItemEntity>?> = home.items
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 

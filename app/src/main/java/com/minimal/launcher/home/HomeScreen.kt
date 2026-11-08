@@ -181,6 +181,9 @@ fun HomeScreen(
     LaunchedEffect(Unit) { vm.accessibilityRequest.collect { showAccessibility = true } }
     val frequent by vm.frequentApps.collectAsState()
     val frequentPosition = FrequentPlacement.effective(settings.frequentPosition, profile.isTablet)
+    val suggested by vm.suggestedApps.collectAsState()
+    // Sugeridas share the strip with Frecuentes; when Frecuentes is hidden they go on top.
+    val stripPosition = if (frequentPosition == FrequentPosition.HIDDEN && suggested.isNotEmpty()) FrequentPosition.TOP else frequentPosition
     val thresholdPx = with(density) { 12.dp.toPx() }
 
     fun openDrawer(search: Boolean = false) {
@@ -484,7 +487,8 @@ fun HomeScreen(
                 )
                 .padding(vertical = 4.dp),
         ) {
-            AppRow(
+            Column {
+            if (frequentPosition != FrequentPosition.HIDDEN) AppRow(
                 title = "Frecuentes",
                 apps = frequent,
                 iconSize = profile.maxIconSize * 0.82f,
@@ -496,6 +500,23 @@ fun HomeScreen(
                 testTag = "frequent_home",
                 onTitleLongPress = { editMode = true },
             )
+            AppRow(
+                title = "Sugeridas",
+                apps = suggested,
+                iconSize = profile.maxIconSize * 0.82f,
+                labelStyle = labelStyle,
+                showLabels = settings.showHomeLabels && !vertical,
+                onLaunch = { vm.launch(it) },
+                menuFor = { app ->
+                    listOf(
+                        MenuAction("No sugerir en este horario", Icons.Outlined.Close) { vm.dismissSuggestion(app.key) },
+                        MenuAction("Información de la app", Icons.Outlined.Info) { actions.openAppInfo(app) },
+                    )
+                },
+                vertical = vertical,
+                testTag = "suggested_home",
+            )
+            }
         }
     }
 
@@ -536,9 +557,9 @@ fun HomeScreen(
                         },
                         onDone = { editMode = false },
                     )
-                    if (frequentPosition == FrequentPosition.TOP) FrequentStrip(false, Modifier.fillMaxWidth().padding(horizontal = profile.homePadding))
+                    if (stripPosition == FrequentPosition.TOP) FrequentStrip(false, Modifier.fillMaxWidth().padding(horizontal = profile.homePadding))
                     Row(Modifier.weight(1f).fillMaxWidth()) {
-                    if (frequentPosition == FrequentPosition.SIDEBAR) FrequentStrip(true, Modifier.fillMaxHeight().padding(start = 8.dp))
+                    if (stripPosition == FrequentPosition.SIDEBAR) FrequentStrip(true, Modifier.fillMaxHeight().padding(start = 8.dp))
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -596,7 +617,7 @@ fun HomeScreen(
                     }
                     }
                     PageIndicator(pagerState.pageCount, pagerState.currentPage, wallpaperText)
-                    if (frequentPosition == FrequentPosition.BOTTOM) FrequentStrip(false, Modifier.fillMaxWidth().padding(horizontal = profile.homePadding))
+                    if (stripPosition == FrequentPosition.BOTTOM) FrequentStrip(false, Modifier.fillMaxWidth().padding(horizontal = profile.homePadding))
                 }
             }
 

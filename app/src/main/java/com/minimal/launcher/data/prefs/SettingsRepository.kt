@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +46,9 @@ data class LauncherSettings(
     val pinnedFrequent: List<String> = emptyList(),
     /** The guided accessibility dialog is shown only once. */
     val accessibilityPrompted: Boolean = false,
+    val showSuggestions: Boolean = true,
+    /** [com.minimal.launcher.usage.Suggestions.dismissKey] of suggestions the user discarded. */
+    val dismissedSuggestions: Set<String> = emptySet(),
     val gestures: Map<HomeGesture, GestureAction> = HomeGesture.entries.associateWith { GestureAction.defaultFor(it) },
 ) {
     fun gesture(g: HomeGesture): GestureAction = gestures[g] ?: GestureAction.defaultFor(g)
@@ -83,6 +87,8 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val frequentCount = intPreferencesKey("frequent_count")
         val pinnedFrequent = stringPreferencesKey("pinned_frequent")
         val a11yPrompted = booleanPreferencesKey("accessibility_prompted")
+        val showSuggestions = booleanPreferencesKey("show_suggestions")
+        val dismissedSuggestions = stringSetPreferencesKey("dismissed_suggestions")
     }
 
     val settings: Flow<LauncherSettings> = store.data.map { p ->
@@ -105,6 +111,8 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             frequentPosition = p[Keys.frequentPosition]?.let { runCatching { FrequentPosition.valueOf(it) }.getOrNull() } ?: FrequentPosition.TOP,
             frequentCount = (p[Keys.frequentCount] ?: 5).coerceIn(5, 8),
             accessibilityPrompted = p[Keys.a11yPrompted] ?: false,
+            showSuggestions = p[Keys.showSuggestions] ?: true,
+            dismissedSuggestions = p[Keys.dismissedSuggestions].orEmpty(),
             gestures = HomeGesture.entries.associateWith { g -> GestureAction.decode(p[gestureKey(g)]) ?: GestureAction.defaultFor(g) },
             pinnedFrequent = p[Keys.pinnedFrequent].orEmpty().split('\n').filter { it.isNotEmpty() },
         )
@@ -138,6 +146,9 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         it[Keys.pinnedFrequent] = (if (pinned) current + appKey else current).joinToString("\n")
     }
     suspend fun setAccessibilityPrompted() = store.edit { it[Keys.a11yPrompted] = true }
+    suspend fun setShowSuggestions(show: Boolean) = store.edit { it[Keys.showSuggestions] = show }
+    suspend fun dismissSuggestion(key: String) = store.edit { it[Keys.dismissedSuggestions] = it[Keys.dismissedSuggestions].orEmpty() + key }
+    suspend fun clearDismissedSuggestions() = store.edit { it.remove(Keys.dismissedSuggestions) }
     suspend fun setDefaultsCreated() = store.edit { it[Keys.defaults] = true }
 
     /** Built-in category taxonomy version; 1 = installations created before the versioning existed. */

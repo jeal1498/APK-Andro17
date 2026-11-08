@@ -312,6 +312,20 @@ fun AppDrawer(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                     )
                 }
+                val suggested by vm.suggestedApps.collectAsState()
+                AppRow(
+                    title = "Sugeridas",
+                    apps = suggested,
+                    iconSize = profile.drawerIconSize * 0.85f,
+                    labelStyle = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                    showLabels = settings.showDrawerLabels,
+                    onLaunch = vm::launch,
+                    menuFor = { app ->
+                        listOf(MenuAction("No sugerir en este horario", Icons.Outlined.Close) { vm.dismissSuggestion(app.key) }) + menuFor(app, null)
+                    },
+                    testTag = "suggested_drawer",
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                )
                 SingleChoiceSegmentedButtonRow(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp).widthIn(max = 420.dp).fillMaxWidth().padding(horizontal = 16.dp)) {
                     SegmentedButton(
                         selected = settings.drawerTab == DrawerTab.CATEGORIES,

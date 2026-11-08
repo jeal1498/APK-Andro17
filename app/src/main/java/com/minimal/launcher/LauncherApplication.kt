@@ -41,12 +41,14 @@ class AppContainer(context: Context) {
     val usage = UsageRepository(database.usageDao(), scope, enabled = { settings.current().learnUsage })
     val actions = AppActions(appContext, onLaunched = { usage.record(it.key) })
     val pairs = PairRepository(database.pairDao())
+    val deviceContext = com.minimal.launcher.usage.ContextMonitor(appContext)
     val systemActions by lazy { com.minimal.launcher.gestures.SystemActions(appContext) }
     val splitScreen = SplitScreenLauncher(appContext, actions, scope, onLaunched = { usage.record(it.key) })
     val widgets = WidgetManager(appContext)
 
     fun start() {
         apps.start()
+        deviceContext.start()
         scope.launch { categories.ensureDefaults() }
         scope.launch { apps.changedPackages.collect { icons.invalidatePackage(it) } }
         scope.launch {

@@ -225,6 +225,17 @@ private fun MainSettings(
         }
         note("pairsNote", "Para crear un par, mantén pulsada una app y elige «Combinar en par». El par aparece en la categoría de su primera app (p. ej. Uber + DiDi en Conducción). Con 3 apps, la tercera se abre como ventana flotante si el dispositivo lo permite.")
 
+        section("Sugeridas")
+        item(key = "suggestions") {
+            SwitchRow("Mostrar Sugeridas", "Según la hora, el día (laboral o fin de semana), los audífonos y el coche", s.showSuggestions, "show_suggestions") {
+                scope.launch { prefs.setShowSuggestions(it) }
+            }
+        }
+        if (s.dismissedSuggestions.isNotEmpty()) item(key = "undismiss") {
+            SettingRow("Restaurar sugerencias descartadas", "${s.dismissedSuggestions.size} descartadas", onClick = { scope.launch { prefs.clearDismissedSuggestions() } }, testTag = "restore_suggestions")
+        }
+        note("suggestionsNote", "Todo se calcula en el teléfono; ningún dato sale del dispositivo. Mantén pulsada una sugerencia para descartarla en ese horario.")
+
         section("Uso de apps")
         item(key = "learnUsage") {
             SwitchRow("Aprender de las apps que abro", "Para Frecuentes y Sugeridas. Se guarda solo en este dispositivo.", s.learnUsage, "learn_usage") {
