@@ -77,6 +77,26 @@ Configura `local.properties` con `sdk.dir=/ruta/al/android-sdk` (plataforma 37 y
 
 **Ajustes**: tema, colores del fondo, cuadrícula (reacomoda sin perder elementos), nombres en inicio/cajón, rotación, barra de búsqueda, columnas, orden, pestaña inicial, categorías, apps ocultas, restaurar clasificación, widgets colocados, fondo de pantalla, información y launcher predeterminado.
 
+**Frecuentes y Sugeridas (100 % local)**
+- *Frecuentes*: 5 a 8 apps (pinned primero, luego las más abiertas con decaimiento a la mitad cada 7 días). Fijar/quitar desde el menú de la app. Posición: arriba, abajo, barra lateral (solo tablet) u oculta; en *modo edición* (pulsación larga en el título «Frecuentes» o menú de inicio › *Editar inicio*) se arrastra a su sitio. En inicio y en el cajón.
+- *Sugeridas*: por franja de 4 h y tipo de día (laboral / fin de semana); audífonos → música; coche (modo coche, o cargando con un Bluetooth de coche) → mapas, Uber, DiDi y *Conducción*. Pulsación larga → «No sugerir en este horario».
+- Se registra cada apertura en Room (`app_usage`). Se puede desactivar y borrar en *Ajustes › Uso de apps*.
+
+**Pares de pantalla dividida**
+- Pulsación larga en una app › *Combinar en par* (1 app más = pantalla dividida; 2 apps = la tercera como ventana flotante si el dispositivo admite *freeform*).
+- Al tocar el par: abre A → `GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN` → abre B con `FLAG_ACTIVITY_LAUNCH_ADJACENT | FLAG_ACTIVITY_NEW_TASK`. Avisa si una app no admite multiventana.
+- El par se guarda en la categoría de su primera app (p. ej. Uber + DiDi en *Conducción*, junto a sus apps), con ícono combinado; se puede cambiar de categoría o eliminar.
+- Necesita el servicio de Accesibilidad *«Minimal Launcher: pantalla dividida y gestos»* (solo acciones globales; no lee la pantalla). Se explica con un diálogo guiado una sola vez. Con un APK instalado a mano, Android puede pedir *Permitir ajustes restringidos* en la info de la app.
+
+**Gestos en inicio** (*Ajustes › Gestos*)
+- Deslizar arriba/abajo, izquierda (en la última página) / derecha (en la primera), doble toque, pellizco, dos dedos arriba/abajo y pulsación larga en vacío.
+- Acciones: app, par, cajón, búsqueda, notificaciones, ajustes rápidos, vista de páginas / modo edición, menú de inicio, linterna, apagar pantalla o nada.
+- Sin choques: se ignoran las zonas de gestos del sistema; el cambio de página, mover iconos (`DragController`/`CellLayout`) y el scroll de widgets tienen prioridad.
+
+**Búsqueda universal**: apps + contactos (permiso opcional), ajustes del sistema por nombre o sinónimo y acciones rápidas («llamar a…», «mensaje a…», números, linterna, buscar en la web).
+
+**Apps ocultas con huella**: `BiometricPrompt` del sistema (huella/rostro, con el bloqueo de pantalla de respaldo). Se abren desde el cajón › ⋮ › *Apps ocultas*. No aparecen en cajón, búsqueda, Frecuentes, Sugeridas ni pares.
+
 ## Arquitectura
 
 ```
@@ -91,8 +111,12 @@ app/src/main/java/com/minimal/launcher/
 ├── home/                    HomeScreen, CellLayout, arrastre, carpetas, reloj, GridPlacement
 ├── widgets/                 AppWidgetHost, host view con long-press, selector, puente AndroidView
 ├── drawer/                  Cajón, categorías, diálogos
-├── search/                  Búsqueda local
-├── settings/                Ajustes (Navigation Compose)
+├── search/                  Búsqueda local y universal (contactos, ajustes, acciones rápidas)
+├── usage/                   Registro de uso, Frecuentes, Sugeridas, contexto (audífonos/coche)
+├── pairs/                   Pares de pantalla dividida y servicio de Accesibilidad
+├── gestures/                Detector y clasificador de gestos, acciones del sistema
+├── security/                Desbloqueo con huella / bloqueo de pantalla
+├── settings/                Ajustes (Navigation Compose) y componentes reutilizables
 └── ui/                      Tema M3 + Dynamic Color, DeviceProfile adaptativo, componentes
 ```
 
@@ -100,7 +124,8 @@ Decisiones clave:
 - **Un solo detector de gestos por página** (tap / long-press / arrastre) para evitar conflictos entre elementos y fondo; los widgets detectan su propia pulsación larga porque sus `RemoteViews` consumen los toques.
 - **Tabla única `home_items`** (escritorio, dock y carpetas), como Launcher3: operaciones atómicas con `withTransaction`.
 - **Clasificación automática no persistida**: es determinista y barata; así los cambios de reglas/palabras clave se reflejan al instante. Solo lo manual se guarda.
-- **Visibilidad de paquetes** con `<queries>` específicas; sin `QUERY_ALL_PACKAGES`. Único permiso: `REQUEST_DELETE_PACKAGES` (diálogo de desinstalación del sistema).
+- **Visibilidad de paquetes** con `<queries>` específicas; sin `QUERY_ALL_PACKAGES`. Permisos: `REQUEST_DELETE_PACKAGES` (desinstalar), `EXPAND_STATUS_BAR` y `USE_BIOMETRIC` (normales, sin diálogo) y `READ_CONTACTS` (opcional, solo si se activa en la búsqueda).
+- **Room v2** con migración automática desde v1 (`app_usage`, `app_pairs`); probada con una base v1 real en `PersistenceTest`.
 - **Copia de seguridad**: se excluye la base de datos (los ids de widgets son específicos del dispositivo).
 
 ## Pruebas
@@ -111,7 +136,10 @@ Decisiones clave:
 
 - **Sin emulador/dispositivo en el entorno de desarrollo** (sin KVM): la UI se validó con Robolectric (renderizado nativo) y no en hardware real. En Robolectric no hay iconos ni etiquetas reales ni wallpaper (capturas con fondo transparente).
 - **Accesos directos de apps** (menú y anclados) requieren ser el launcher predeterminado (restricción de Android).
-- **Deslizar hacia abajo para notificaciones** no existe como API pública; no se implementa.
+- **No probado en dispositivo real**: pantalla dividida, ventana flotante del trío, servicio de Accesibilidad, gestos multitáctiles reales, huella, linterna y detección de audífonos/coche. La lógica sí tiene pruebas (clasificadores, ranking, ubicación de pares, migración) y la UI se probó en Robolectric.
+- La pantalla dividida depende del fabricante: algunos (One UI, MIUI) cambian tiempos o bloquean `LAUNCH_ADJACENT`; los retardos son conservadores.
+- «Notificaciones» sin Accesibilidad usa una API interna de la barra de estado (puede fallar en algunos fabricantes).
+- El coche se detecta por nombre del Bluetooth (heurística) o modo coche.
 - No hay *pull-to-search* de servicios externos ni sugerencias web (todo es local por diseño).
 - Arrastrar desde dentro de una carpeta abierta no está soportado (se usa “Sacar de la carpeta”).
 - La restauración de widgets desde una copia de seguridad del sistema (`APPWIDGET_HOST_RESTORED`) no está implementada; la BD se excluye del backup.
