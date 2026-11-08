@@ -100,6 +100,10 @@ import com.minimal.launcher.widgets.WidgetPickerSheet
 import com.minimal.launcher.data.prefs.FrequentPosition
 import com.minimal.launcher.ui.components.AppRow
 import com.minimal.launcher.usage.FrequentPlacement
+import com.minimal.launcher.pairs.AccessibilityDialog
+import com.minimal.launcher.pairs.LauncherAccessibilityService
+import com.minimal.launcher.pairs.PairPickerDialog
+import androidx.compose.material.icons.outlined.VerticalSplit
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material.icons.outlined.PushPin
@@ -166,6 +170,9 @@ fun HomeScreen(
     var drawerDragging by remember { mutableStateOf(false) }
     var lastCellDp by remember { mutableStateOf(80f to 100f) }
     var editMode by remember { mutableStateOf(false) }
+    var pairFor by remember { mutableStateOf<AppInfo?>(null) }
+    var showAccessibility by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { vm.accessibilityRequest.collect { showAccessibility = true } }
     val frequent by vm.frequentApps.collectAsState()
     val frequentPosition = FrequentPlacement.effective(settings.frequentPosition, profile.isTablet)
     val thresholdPx = with(density) { 12.dp.toPx() }
@@ -331,6 +338,7 @@ fun HomeScreen(
         val app = item.appKey?.let { appsByKey[it] }
         when (item.type) {
             HomeItemEntity.TYPE_APP -> if (app != null) {
+                add(MenuAction("Combinar en par", Icons.Outlined.VerticalSplit) { pairFor = app })
                 add(MenuAction("Información de la app", Icons.Outlined.Info) { actions.openAppInfo(app) })
             }
             HomeItemEntity.TYPE_FOLDER -> {
@@ -659,6 +667,15 @@ fun HomeScreen(
                 onAddApps = { keys -> keys.forEach { vm.addAppToFolder(folder.id, it) } },
                 onUngroup = { openFolderId = null; vm.ungroupFolder(folder.id, pagerState.currentPage) },
                 onAppInfo = { app -> actions.openAppInfo(app) },
+            )
+        }
+        pairFor?.let { first ->
+            PairPickerDialog(first, vm.visibleApps.collectAsState().value, onDismiss = { pairFor = null }) { keys -> pairFor = null; vm.createPair(keys) }
+        }
+        if (showAccessibility) {
+            AccessibilityDialog(
+                onOpenSettings = { actions.startIntent(LauncherAccessibilityService.settingsIntent()) },
+                onDismiss = { showAccessibility = false; vm.markAccessibilityPrompted() },
             )
         }
         if (showWidgetPicker) {

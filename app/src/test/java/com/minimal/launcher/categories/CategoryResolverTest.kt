@@ -88,4 +88,34 @@ class CategoryResolverTest {
         val groups = CategoryResolver.group(listOf(unknown), remaining, assignments, setOf(unknown.key))
         assertEquals(listOf(unknown), groups.last().apps)
     }
+
+    @Test fun pairsLiveInTheCategoryOfTheirFirstAppUnlessMovedByHand() {
+        val uber = app("com.ubercab.driver", "Uber Driver")
+        val didi = app("com.didiglobal.driver", "DiDi Conductor")
+        val pair = com.minimal.launcher.data.db.AppPairEntity(id = 1, apps = com.minimal.launcher.data.db.AppPairEntity.encode(listOf(uber.key, didi.key, whatsapp.key)))
+        val driving = cat(BuiltinCategory.DRIVING)
+
+        var groups = CategoryResolver.group(listOf(uber, didi, whatsapp), categories, emptyList(), emptySet(), listOf(pair))
+        val drivingGroup = groups.first { it.id == driving }
+        assertEquals(listOf(1L), drivingGroup.pairs.map { it.id })
+        assertTrue(uber in drivingGroup.apps && didi in drivingGroup.apps) // individual apps stay
+        assertEquals(3, drivingGroup.pairs.single().apps.size)
+        assertEquals("Uber Driver + DiDi Conductor + WhatsApp", drivingGroup.pairs.single().label)
+
+        // Moved by hand to Comunicación.
+        val comm = cat(BuiltinCategory.COMMUNICATION)
+        groups = CategoryResolver.group(listOf(uber, didi, whatsapp), categories, emptyList(), emptySet(), listOf(pair.copy(categoryId = comm)))
+        assertTrue(groups.first { it.id == driving }.pairs.isEmpty())
+        assertTrue(groups.first { it.id == comm }.pairs.single().manualCategory)
+
+        // A deleted manual category falls back to automatic; an unclassified first app goes to "Sin clasificar".
+        assertEquals(driving, CategoryResolver.pairCategory(999L, setOf(driving), setOf(driving)))
+        assertEquals(UNCLASSIFIED_ID, CategoryResolver.pairCategory(null, emptySet(), setOf(driving)))
+    }
+
+    @Test fun pairsNeedAtLeastTwoVisibleApps() {
+        val pair = com.minimal.launcher.data.db.AppPairEntity(id = 2, apps = com.minimal.launcher.data.db.AppPairEntity.encode(listOf(whatsapp.key, "gone/.M#0")))
+        val groups = CategoryResolver.group(listOf(whatsapp), categories, emptyList(), emptySet(), listOf(pair))
+        assertTrue(groups.all { it.pairs.isEmpty() })
+    }
 }

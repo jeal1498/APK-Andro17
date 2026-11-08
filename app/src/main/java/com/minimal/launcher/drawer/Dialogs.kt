@@ -162,9 +162,13 @@ fun AppPickerDialog(
     apps: List<AppInfo>,
     onDismiss: () -> Unit,
     onConfirm: (List<AppInfo>) -> Unit,
+    maxSelection: Int = Int.MAX_VALUE,
+    confirmLabel: String = "Añadir",
+    subtitle: String? = null,
 ) {
     var query by remember { mutableStateOf("") }
-    var selected by remember { mutableStateOf(setOf<String>()) }
+    // Ordered: for pairs the selection order matters.
+    var selected by remember { mutableStateOf(listOf<String>()) }
     val shown = remember(apps, query) { if (query.isBlank()) apps else AppSearch.search(apps, query) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -172,6 +176,7 @@ fun AppPickerDialog(
         title = { Text(title) },
         text = {
             Column {
+                subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp)) }
                 OutlinedTextField(
                     query, { query = it }, singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) },
                     placeholder = { Text("Buscar") }, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth(),
@@ -180,7 +185,13 @@ fun AppPickerDialog(
                     items(shown, key = { it.key }) { app ->
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                                .clickable { selected = if (app.key in selected) selected - app.key else selected + app.key }
+                                .clickable {
+                                    selected = when {
+                                        app.key in selected -> selected - app.key
+                                        selected.size >= maxSelection -> if (maxSelection == 1) listOf(app.key) else selected
+                                        else -> selected + app.key
+                                    }
+                                }
                                 .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -194,7 +205,10 @@ fun AppPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(enabled = selected.isNotEmpty(), onClick = { onConfirm(apps.filter { it.key in selected }) }) { Text("Añadir") }
+            TextButton(enabled = selected.isNotEmpty(), onClick = {
+                val byKey = apps.associateBy { it.key }
+                onConfirm(selected.mapNotNull { byKey[it] })
+            }) { Text(confirmLabel) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )

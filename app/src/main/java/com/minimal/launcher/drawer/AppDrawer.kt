@@ -13,6 +13,10 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items as listItems
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -121,6 +125,11 @@ import com.minimal.launcher.ui.components.LocalAppActions
 import com.minimal.launcher.ui.components.MenuAction
 import com.minimal.launcher.ui.components.detectLauncherGestures
 import com.minimal.launcher.ui.components.AppRow
+import com.minimal.launcher.categories.AppPair
+import com.minimal.launcher.pairs.PairIcon
+import com.minimal.launcher.pairs.PairPickerDialog
+import androidx.compose.material.icons.outlined.VerticalSplit
+import androidx.compose.material.icons.outlined.DriveFileMove
 import com.minimal.launcher.data.prefs.FrequentPosition
 import androidx.compose.material.icons.outlined.PushPin
 import kotlinx.coroutines.launch
@@ -154,6 +163,8 @@ fun AppDrawer(
     var editing by remember { mutableStateOf<CategoryWithApps?>(null) }
     var creating by remember { mutableStateOf(false) }
     var addingTo by remember { mutableStateOf<CategoryWithApps?>(null) }
+    var pairFor by remember { mutableStateOf<AppInfo?>(null) }
+    var movingPair by remember { mutableStateOf<AppPair?>(null) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -254,12 +265,20 @@ fun AppDrawer(
                     if (inCategory != null && !inCategory.isUnclassified) {
                         add(MenuAction("Quitar de ${inCategory.name}", Icons.Outlined.RemoveCircleOutline) { vm.removeAppFromCategory(app, inCategory.id) })
                     }
+                    add(MenuAction("Combinar en par", Icons.Outlined.VerticalSplit) { pairFor = app })
                     val pinned = app.key in settings.pinnedFrequent
                     add(MenuAction(if (pinned) "Quitar de Frecuentes" else "Fijar en Frecuentes", Icons.Outlined.PushPin) { vm.setFrequentPinned(app.key, !pinned) })
                     add(MenuAction("Información de la app", Icons.Outlined.Info) { actions.openAppInfo(app) })
                     add(MenuAction("Ocultar", Icons.Outlined.VisibilityOff) { vm.hideApp(app.key) })
                     add(MenuAction("Desinstalar", Icons.Outlined.DeleteOutline) { actions.uninstall(app) })
                 }
+            }
+            val pairMenu: (AppPair) -> List<MenuAction> = { pair ->
+                listOf(
+                    MenuAction("Abrir en pantalla dividida", Icons.Outlined.VerticalSplit) { vm.launchPair(pair) },
+                    MenuAction("Cambiar de categoría…", Icons.Outlined.DriveFileMove) { movingPair = pair },
+                    MenuAction("Eliminar par", Icons.Outlined.DeleteOutline) { vm.deletePair(pair.id) },
+                )
             }
             val gridPadding = PaddingValues(
                 start = 12.dp, end = 12.dp, top = 8.dp,
@@ -350,6 +369,8 @@ fun AppDrawer(
                                 onLaunch = vm::launch,
                                 menuFor = { menuFor(it, category) },
                                 dragCallbacks = dragCallbacks,
+                                onLaunchPair = vm::launchPair,
+                                pairMenuFor = pairMenu,
                             )
                         }
                     }
@@ -382,6 +403,12 @@ fun AppDrawer(
             onDismiss = { creating = false },
             onSave = { n, i, k -> vm.createCategory(n, i, k); creating = false },
         )
+    }
+    pairFor?.let { first ->
+        PairPickerDialog(first, apps, onDismiss = { pairFor = null }) { keys -> pairFor = null; vm.createPair(keys) }
+    }
+    movingPair?.let { pair ->
+        PairCategoryDialog(pair, categories, onDismiss = { movingPair = null }) { id -> movingPair = null; vm.setPairCategory(pair.id, id) }
     }
     addingTo?.let { c ->
         val existing = c.apps.map { it.key }.toSet()
@@ -468,6 +495,9 @@ fun AppGrid(
     dragCallbacks: DrawerDragCallbacks,
     testTag: String,
     header: (@Composable () -> Unit)? = null,
+    pairs: List<AppPair> = emptyList(),
+    onLaunchPair: (AppPair) -> Unit = {},
+    pairMenuFor: (AppPair) -> List<MenuAction> = { emptyList() },
 ) {
     val state = rememberLazyGridState()
     LazyVerticalGrid(
@@ -478,6 +508,7 @@ fun AppGrid(
         modifier = Modifier.fillMaxSize().testTag(testTag),
     ) {
         if (header != null) item(span = { GridItemSpan(maxLineSpan) }) { header() }
+        items(pairs, key = { "pair_${it.id}" }) { pair -> PairItem(pair, iconSize, showLabels, onLaunchPair, pairMenuFor) }
         items(apps, key = { it.key }) { app ->
             DrawerAppItem(app, iconSize, showLabels, onLaunch, menuFor, dragCallbacks)
         }
@@ -539,6 +570,55 @@ private fun DrawerAppItem(
         )
         LauncherMenu(expanded = menu, onDismiss = { menu = false }, actions = menuFor(app), app = app)
     }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PairItem(pair: AppPair, iconSize: Dp, showLabels: Boolean, onLaunch: (AppPair) -> Unit, menuFor: (AppPair) -> List<MenuAction>) {
+    val haptics = LocalHapticFeedback.current
+    var menu by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxWidth().testTag("pair_${pair.label}"), contentAlignment = Alignment.Center) {
+        AppTile(
+            icon = { size -> PairIcon(pair.apps, size) },
+            label = pair.label,
+            iconSize = iconSize,
+            showLabel = showLabels,
+            labelStyle = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).combinedClickable(
+                onClick = { onLaunch(pair) },
+                onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true },
+            ),
+        )
+        LauncherMenu(expanded = menu, onDismiss = { menu = false }, actions = menuFor(pair))
+    }
+}
+
+/** Moves a pair to another category; "Automática" goes back to the first app's category. */
+@Composable
+private fun PairCategoryDialog(pair: AppPair, categories: List<CategoryWithApps>, onDismiss: () -> Unit, onPick: (Long?) -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Categoría de ${pair.label}") },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                item {
+                    CategoryChoice("Automática (la de ${pair.apps.first().label})", !pair.manualCategory) { onPick(null) }
+                }
+                listItems(categories.filterNot { it.isUnclassified }, key = { it.id }) { c ->
+                    CategoryChoice(c.name, pair.manualCategory && c.id == pair.categoryId) { onPick(c.id) }
+                }
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cerrar") } },
+    )
+}
+
+@Composable
+private fun CategoryChoice(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) { Text((if (selected) "● " else "○ ") + label) }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -655,6 +735,8 @@ private fun CategoryDetail(
     onLaunch: (AppInfo) -> Unit,
     menuFor: (AppInfo) -> List<MenuAction>,
     dragCallbacks: DrawerDragCallbacks,
+    onLaunchPair: (AppPair) -> Unit,
+    pairMenuFor: (AppPair) -> List<MenuAction>,
 ) {
     Column(Modifier.fillMaxSize().testTag("category_detail")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -673,13 +755,14 @@ private fun CategoryDetail(
                 IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, "Editar categoría") }
             }
         }
-        if (category.apps.isEmpty()) {
+        if (category.apps.isEmpty() && category.pairs.isEmpty()) {
             EmptyState(if (category.isUnclassified) "Todas las apps están clasificadas" else "Esta categoría está vacía. Pulsa + para añadir apps.")
         } else {
             AppGrid(
                 apps = category.apps, columns = profile.drawerColumns, iconSize = profile.drawerIconSize,
                 showLabels = settings.showDrawerLabels, contentPadding = contentPadding,
                 onLaunch = onLaunch, menuFor = menuFor, dragCallbacks = dragCallbacks, testTag = "category_apps",
+                pairs = category.pairs, onLaunchPair = onLaunchPair, pairMenuFor = pairMenuFor,
             )
         }
     }

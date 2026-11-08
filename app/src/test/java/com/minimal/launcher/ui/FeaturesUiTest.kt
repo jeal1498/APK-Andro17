@@ -7,21 +7,24 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.onFirst
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** UI checks for the features added on top of the base launcher (Frecuentes, pares, gestos…). */
+/** Base for feature UI tests: one test per class (each class gets a fresh JVM, see build.gradle.kts). */
+abstract class FeatureUiBase : LauncherUiBase() {
+    protected fun keyOf(pkg: String) = app.container.apps.apps.value.first { it.packageName == pkg }.key
+}
+
 @OptIn(ExperimentalTestApi::class)
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w411dp-h891dp-port-xxhdpi")
-class FeaturesUiTest : LauncherUiBase() {
-
-    private fun keyOf(pkg: String) = app.container.apps.apps.value.first { it.packageName == pkg }.key
-
+class FrequentRowUiTest : FeatureUiBase() {
     @Test fun frequentRowAppearsAfterLaunchesAndEnablesEditMode() {
         launch()
         repeat(3) { app.container.usage.record(keyOf("com.whatsapp")) }
@@ -30,5 +33,24 @@ class FeaturesUiTest : LauncherUiBase() {
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("edit_mode_bar").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("edit_done").performClick()
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("edit_mode_bar").fetchSemanticsNodes().isEmpty() }
+    }
+}
+
+@OptIn(ExperimentalTestApi::class)
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(qualifiers = "w411dp-h891dp-port-xxhdpi")
+class PairUiTest : FeatureUiBase() {
+    @Test fun pairShowsInCategoryOfFirstAppAndAsksForAccessibility() {
+        launch()
+        kotlinx.coroutines.runBlocking { app.container.pairs.create(listOf(keyOf("com.whatsapp"), keyOf("com.instagram.android"))) }
+        compose.onNodeWithTag("home").performTouchInput { swipeUp() }
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("drawer").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("tab_categories").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("category_Comunicación").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("category_Comunicación").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("pair_icon", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithTag("pair_icon", useUnmergedTree = true).onFirst().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("accessibility_dialog").fetchSemanticsNodes().isNotEmpty() }
     }
 }

@@ -41,6 +41,8 @@ data class LauncherSettings(
     val frequentCount: Int = 5,
     /** Apps pinned to Frecuentes by hand, in order. */
     val pinnedFrequent: List<String> = emptyList(),
+    /** The guided accessibility dialog is shown only once. */
+    val accessibilityPrompted: Boolean = false,
 )
 
 
@@ -75,6 +77,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val frequentPosition = stringPreferencesKey("frequent_position")
         val frequentCount = intPreferencesKey("frequent_count")
         val pinnedFrequent = stringPreferencesKey("pinned_frequent")
+        val a11yPrompted = booleanPreferencesKey("accessibility_prompted")
     }
 
     val settings: Flow<LauncherSettings> = store.data.map { p ->
@@ -96,6 +99,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             learnUsage = p[Keys.learnUsage] ?: true,
             frequentPosition = p[Keys.frequentPosition]?.let { runCatching { FrequentPosition.valueOf(it) }.getOrNull() } ?: FrequentPosition.TOP,
             frequentCount = (p[Keys.frequentCount] ?: 5).coerceIn(5, 8),
+            accessibilityPrompted = p[Keys.a11yPrompted] ?: false,
             pinnedFrequent = p[Keys.pinnedFrequent].orEmpty().split('\n').filter { it.isNotEmpty() },
         )
     }
@@ -124,6 +128,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val current = it[Keys.pinnedFrequent].orEmpty().split('\n').filter { k -> k.isNotEmpty() && k != appKey }
         it[Keys.pinnedFrequent] = (if (pinned) current + appKey else current).joinToString("\n")
     }
+    suspend fun setAccessibilityPrompted() = store.edit { it[Keys.a11yPrompted] = true }
     suspend fun setDefaultsCreated() = store.edit { it[Keys.defaults] = true }
 
     /** Built-in category taxonomy version; 1 = installations created before the versioning existed. */

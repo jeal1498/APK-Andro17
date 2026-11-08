@@ -10,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import com.minimal.launcher.applications.AppInfo
 import com.minimal.launcher.categories.CategoryResolver
 import com.minimal.launcher.categories.CategoryWithApps
+import com.minimal.launcher.categories.AppPair
+import com.minimal.launcher.pairs.SplitScreenLauncher
 import com.minimal.launcher.categories.Resolution
 import com.minimal.launcher.data.db.HiddenAppEntity
 import com.minimal.launcher.data.db.HomeItemEntity
@@ -52,10 +54,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val categories: StateFlow<List<CategoryWithApps>> = combine(
-        visibleApps, container.categories.categories, container.categories.assignments, container.categories.manualApps,
-    ) { apps, cats, assignments, manual ->
-        CategoryResolver.group(apps, cats, assignments, manual.toSet())
+        visibleApps, container.categories.categories, container.categories.assignments, container.categories.manualApps, container.pairs.pairs,
+    ) { apps, cats, assignments, manual, pairs ->
+        CategoryResolver.group(apps, cats, assignments, manual.toSet(), pairs)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Every visible pair, whatever its category. */
+    val pairs: StateFlow<List<AppPair>> = categories.map { cats -> cats.flatMap { it.pairs } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _accessibilityRequest = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** Emitted the first time a feature needs the accessibility service: the UI shows the guided dialog. */
+    val accessibilityRequest: SharedFlow<Unit> = _accessibilityRequest.asSharedFlow()
 
     /** "Frecuentes": pinned apps first, then the most opened ones (decayed by days). Hidden apps never appear. */
     val frequentApps: StateFlow<List<AppInfo>> = combine(visibleApps, container.usage.usage, container.settings.settings) { apps, usage, s ->
@@ -151,6 +161,29 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun setFrequentPinned(appKey: String, pinned: Boolean) = viewModelScope.launch { container.settings.setFrequentPinned(appKey, pinned) }
     fun setFrequentPosition(position: FrequentPosition) = viewModelScope.launch { container.settings.setFrequentPosition(position) }
+
+    // ---- Split-screen pairs ------------------------------------------------------------------
+
+    fun launchPair(pair: AppPair) {
+        if (container.splitScreen.launch(pair) == SplitScreenLauncher.Result.NEEDS_PERMISSION) requestAccessibility()
+    }
+
+    /** Guided dialog once; afterwards a short reminder. */
+    fun requestAccessibility() = viewModelScope.launch {
+        if (!container.settings.current().accessibilityPrompted) _accessibilityRequest.tryEmit(Unit)
+        else _messages.tryEmit("Activa «Minimal Launcher» en Ajustes › Accesibilidad para usar esta función")
+    }
+
+    fun markAccessibilityPrompted() = viewModelScope.launch { container.settings.setAccessibilityPrompted() }
+
+    fun createPair(keys: List<String>) = viewModelScope.launch {
+        val id = container.pairs.create(keys)
+        _messages.tryEmit(if (id != null) "Par creado en la categoría de ${findApp(keys.first())?.label ?: "la primera app"}" else "Elige 1 o 2 apps más")
+        if (id != null && !com.minimal.launcher.pairs.LauncherAccessibilityService.isEnabled(getApplication())) requestAccessibility()
+    }
+
+    fun deletePair(id: Long) = viewModelScope.launch { container.pairs.delete(id) }
+    fun setPairCategory(id: Long, categoryId: Long?) = viewModelScope.launch { container.pairs.setCategory(id, categoryId) }
 
     fun hideApp(appKey: String) = viewModelScope.launch { container.hiddenApps.hide(HiddenAppEntity(appKey)) }
     fun unhideApp(appKey: String) = viewModelScope.launch { container.hiddenApps.unhide(appKey) }

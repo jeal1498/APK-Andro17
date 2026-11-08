@@ -204,6 +204,22 @@ private fun MainSettings(
         }
         note("frequentNote", "Para fijar una app, mantenla pulsada en el cajón y elige «Fijar en Frecuentes». Para mover la fila, mantén pulsado su título.")
 
+        section("Pantalla dividida")
+        item(key = "a11y") {
+            var enabled by remember { mutableStateOf(false) }
+            androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+                enabled = com.minimal.launcher.pairs.LauncherAccessibilityService.isEnabled(context)
+                onPauseOrDispose { }
+            }
+            SettingRow(
+                "Servicio de Accesibilidad",
+                if (enabled) "Activado: pares y gestos del sistema disponibles" else "Desactivado: toca para activarlo",
+                onClick = { runCatching { context.startActivity(com.minimal.launcher.pairs.LauncherAccessibilityService.settingsIntent()) } },
+                testTag = "accessibility_setting",
+            )
+        }
+        note("pairsNote", "Para crear un par, mantén pulsada una app y elige «Combinar en par». El par aparece en la categoría de su primera app (p. ej. Uber + DiDi en Conducción). Con 3 apps, la tercera se abre como ventana flotante si el dispositivo lo permite.")
+
         section("Uso de apps")
         item(key = "learnUsage") {
             SwitchRow("Aprender de las apps que abro", "Para Frecuentes y Sugeridas. Se guarda solo en este dispositivo.", s.learnUsage, "learn_usage") {

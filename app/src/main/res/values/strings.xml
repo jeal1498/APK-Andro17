@@ -1,4 +1,6 @@
 <resources>
     <string name="app_name">Minimal Launcher</string>
     <string name="settings_label">Ajustes de Minimal Launcher</string>
+    <string name="accessibility_label">Minimal Launcher: pantalla dividida y gestos</string>
+    <string name="accessibility_description">Permite que Minimal Launcher active la pantalla dividida al abrir un par de apps, apague la pantalla y abra las notificaciones con gestos. No lee ni guarda lo que aparece en pantalla.</string>
 </resources>

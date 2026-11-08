@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Used only to perform global actions the launcher cannot do by itself: split screen (pairs),
+    turning the screen off and opening notifications (gestures). It reads no screen content
+    except the list of windows, to check whether the screen was really split.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowsChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/accessibility_description"
+    android:notificationTimeout="200"
+    android:isAccessibilityTool="false" />
