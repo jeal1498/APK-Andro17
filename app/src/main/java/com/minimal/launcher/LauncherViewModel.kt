@@ -18,6 +18,8 @@ import com.minimal.launcher.data.prefs.DrawerTab
 import com.minimal.launcher.data.prefs.LauncherSettings
 import com.minimal.launcher.home.HomeRepository
 import com.minimal.launcher.ui.DeviceProfile
+import com.minimal.launcher.usage.FrequentApps
+import com.minimal.launcher.data.prefs.FrequentPosition
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -53,6 +55,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         visibleApps, container.categories.categories, container.categories.assignments, container.categories.manualApps,
     ) { apps, cats, assignments, manual ->
         CategoryResolver.group(apps, cats, assignments, manual.toSet())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** "Frecuentes": pinned apps first, then the most opened ones (decayed by days). Hidden apps never appear. */
+    val frequentApps: StateFlow<List<AppInfo>> = combine(visibleApps, container.usage.usage, container.settings.settings) { apps, usage, s ->
+        val byKey = apps.associateBy { it.key }
+        FrequentApps.select(usage, s.pinnedFrequent, byKey.keys, s.frequentCount, System.currentTimeMillis()).mapNotNull { byKey[it] }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val homeItems: StateFlow<List<HomeItemEntity>?> = home.items
@@ -140,6 +148,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val cols = container.settings.current().homeColumns
         message(home.addToDock(appKey, cols), "Añadida al dock")
     }
+
+    fun setFrequentPinned(appKey: String, pinned: Boolean) = viewModelScope.launch { container.settings.setFrequentPinned(appKey, pinned) }
+    fun setFrequentPosition(position: FrequentPosition) = viewModelScope.launch { container.settings.setFrequentPosition(position) }
 
     fun hideApp(appKey: String) = viewModelScope.launch { container.hiddenApps.hide(HiddenAppEntity(appKey)) }
     fun unhideApp(appKey: String) = viewModelScope.launch { container.hiddenApps.unhide(appKey) }

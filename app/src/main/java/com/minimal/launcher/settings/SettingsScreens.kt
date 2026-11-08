@@ -72,6 +72,7 @@ import com.minimal.launcher.categories.CategoryResolver
 import com.minimal.launcher.data.db.HomeItemEntity
 import com.minimal.launcher.data.prefs.AppSort
 import com.minimal.launcher.data.prefs.DrawerTab
+import com.minimal.launcher.data.prefs.FrequentPosition
 import com.minimal.launcher.data.prefs.LauncherSettings
 import com.minimal.launcher.data.prefs.ThemeMode
 import com.minimal.launcher.drawer.CategoryEditorDialog
@@ -184,6 +185,24 @@ private fun MainSettings(
         item(key = "cats") { SettingRow("Categorías", "Crear, editar, ordenar y eliminar", onClick = { navigate(Routes.CATEGORIES) }, testTag = "manage_categories") }
         item(key = "hidden") { SettingRow("Apps ocultas", null, onClick = { navigate(Routes.HIDDEN) }, testTag = "hidden_apps") }
         item(key = "restore") { SettingRow("Restaurar clasificación automática", "Elimina todas las asignaciones manuales", onClick = { confirmRestore = true }, testTag = "restore_auto") }
+
+        section("Frecuentes")
+        item(key = "frequentPos") {
+            ChoiceRow(
+                "Posición de la fila",
+                listOf(
+                    SettingOption(FrequentPosition.TOP, "Arriba"),
+                    SettingOption(FrequentPosition.BOTTOM, "Abajo, sobre el dock"),
+                    SettingOption(FrequentPosition.SIDEBAR, "Barra lateral", "Solo en tablets; en teléfonos se muestra arriba"),
+                    SettingOption(FrequentPosition.HIDDEN, "Oculta"),
+                ),
+                s.frequentPosition, "frequent_position",
+            ) { scope.launch { prefs.setFrequentPosition(it) } }
+        }
+        item(key = "frequentCount") {
+            ChoiceRow("Número de apps", (5..8).map { SettingOption(it, "$it apps") }, s.frequentCount, "frequent_count") { scope.launch { prefs.setFrequentCount(it) } }
+        }
+        note("frequentNote", "Para fijar una app, mantenla pulsada en el cajón y elige «Fijar en Frecuentes». Para mover la fila, mantén pulsado su título.")
 
         section("Uso de apps")
         item(key = "learnUsage") {

@@ -97,6 +97,16 @@ import com.minimal.launcher.ui.components.wallpaperLabelStyle
 import com.minimal.launcher.ui.theme.isDarkTheme
 import com.minimal.launcher.ui.theme.rememberWallpaperPrefersDarkText
 import com.minimal.launcher.widgets.WidgetPickerSheet
+import com.minimal.launcher.data.prefs.FrequentPosition
+import com.minimal.launcher.ui.components.AppRow
+import com.minimal.launcher.usage.FrequentPlacement
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.OpenWith
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -155,6 +165,9 @@ fun HomeScreen(
     var drawerSearchFocus by remember { mutableStateOf(false) }
     var drawerDragging by remember { mutableStateOf(false) }
     var lastCellDp by remember { mutableStateOf(80f to 100f) }
+    var editMode by remember { mutableStateOf(false) }
+    val frequent by vm.frequentApps.collectAsState()
+    val frequentPosition = FrequentPlacement.effective(settings.frequentPosition, profile.isTablet)
     val thresholdPx = with(density) { 12.dp.toPx() }
 
     fun openDrawer(search: Boolean = false) {
@@ -169,15 +182,16 @@ fun HomeScreen(
     // Home button while already home: close overlays, then go back to the first page.
     LaunchedEffect(Unit) {
         vm.homePressed.collect {
-            val overlay = drawerProgress.value > 0f || openFolderId != null || resizingId != null || showWidgetPicker || menu != null
-            menu = null; resizingId = null; openFolderId = null; showWidgetPicker = false
+            val overlay = drawerProgress.value > 0f || openFolderId != null || resizingId != null || showWidgetPicker || menu != null || editMode
+            menu = null; resizingId = null; openFolderId = null; showWidgetPicker = false; editMode = false
             if (drawerProgress.value > 0f) closeDrawer()
             if (!overlay) pagerState.animateScrollToPage(0)
         }
     }
-    BackHandler(enabled = resizingId != null || openFolderId != null || menu != null) {
+    BackHandler(enabled = resizingId != null || openFolderId != null || menu != null || editMode) {
         when {
             menu != null -> menu = null
+            editMode && resizingId == null && openFolderId == null -> editMode = false
             resizingId != null -> resizingId = null
             else -> openFolderId = null
         }
@@ -386,6 +400,55 @@ fun HomeScreen(
         override fun onEnd(cancelled: Boolean) = onDrop(cancelled)
     }
 
+    fun frequentActions(app: AppInfo): List<MenuAction> = buildList {
+        val pinned = app.key in settings.pinnedFrequent
+        add(MenuAction(if (pinned) "Quitar de Frecuentes" else "Fijar en Frecuentes", Icons.Outlined.PushPin) { vm.setFrequentPinned(app.key, !pinned) })
+        add(MenuAction("Mover la fila", Icons.Outlined.OpenWith) { editMode = true })
+        add(MenuAction("Información de la app", Icons.Outlined.Info) { actions.openAppInfo(app) })
+    }
+
+    /** The "Frecuentes" row. In edit mode it can be dragged to the top, bottom or (tablets) the side. */
+    @Composable
+    fun FrequentStrip(vertical: Boolean, modifier: Modifier = Modifier) {
+        var offset by remember { mutableStateOf(Offset.Zero) }
+        var bounds by remember { mutableStateOf(Rect.Zero) }
+        val editing = editMode
+        Box(
+            modifier
+                .onGloballyPositioned { bounds = it.boundsInRoot() }
+                .offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
+                .then(
+                    if (editing) Modifier
+                        .border(2.dp, wallpaperText.copy(alpha = 0.7f), RoundedCornerShape(20.dp))
+                        .pointerInput(profile.isTablet) {
+                            detectDragGestures(
+                                onDragEnd = {
+                                    val c = bounds.center + offset
+                                    offset = Offset.Zero
+                                    vm.setFrequentPosition(FrequentPlacement.dropTarget(c.x, c.y, view.width.toFloat(), view.height.toFloat(), profile.isTablet))
+                                },
+                                onDragCancel = { offset = Offset.Zero },
+                            ) { change, delta -> change.consume(); offset += delta }
+                        }
+                    else Modifier,
+                )
+                .padding(vertical = 4.dp),
+        ) {
+            AppRow(
+                title = "Frecuentes",
+                apps = frequent,
+                iconSize = profile.maxIconSize * 0.82f,
+                labelStyle = labelStyle,
+                showLabels = settings.showHomeLabels && !vertical,
+                onLaunch = { vm.launch(it) },
+                menuFor = ::frequentActions,
+                vertical = vertical,
+                testTag = "frequent_home",
+                onTitleLongPress = { editMode = true },
+            )
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         // ---------------- Home content ----------------
         val velocity = remember { VelocityTracker() }
@@ -419,9 +482,19 @@ fun HomeScreen(
         ) {
             val pagesArea: @Composable (Modifier) -> Unit = { mod ->
                 Column(mod) {
+                    if (editMode) EditModeBar(
+                        frequentHidden = settings.frequentPosition == FrequentPosition.HIDDEN,
+                        onToggleFrequent = {
+                            vm.setFrequentPosition(if (settings.frequentPosition == FrequentPosition.HIDDEN) FrequentPosition.TOP else FrequentPosition.HIDDEN)
+                        },
+                        onDone = { editMode = false },
+                    )
+                    if (frequentPosition == FrequentPosition.TOP) FrequentStrip(false, Modifier.fillMaxWidth().padding(horizontal = profile.homePadding))
+                    Row(Modifier.weight(1f).fillMaxWidth()) {
+                    if (frequentPosition == FrequentPosition.SIDEBAR) FrequentStrip(true, Modifier.fillMaxHeight().padding(start = 8.dp))
                     HorizontalPager(
                         state = pagerState,
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                         beyondViewportPageCount = 1,
                         key = { it },
                     ) { page ->
@@ -461,6 +534,7 @@ fun HomeScreen(
                                         actions = buildList {
                                             add(MenuAction("Widgets", Icons.Outlined.Widgets) { showWidgetPicker = true })
                                             add(MenuAction("Fondo de pantalla", Icons.Outlined.Wallpaper) { host.openWallpaperPicker() })
+                                            add(MenuAction("Editar inicio", Icons.Outlined.Edit) { editMode = true })
                                             add(MenuAction("Ajustes de inicio", Icons.Outlined.Settings) { host.openSettings() })
                                             add(MenuAction("Añadir página", Icons.Outlined.AddBox) {
                                                 vm.addPage()
@@ -473,7 +547,9 @@ fun HomeScreen(
                             }
                         }
                     }
+                    }
                     PageIndicator(pagerState.pageCount, pagerState.currentPage, wallpaperText)
+                    if (frequentPosition == FrequentPosition.BOTTOM) FrequentStrip(false, Modifier.fillMaxWidth().padding(horizontal = profile.homePadding))
                 }
             }
 
@@ -595,6 +671,25 @@ fun HomeScreen(
                     host.addWidget(info, pagerState.currentPage, lastCellDp.first, lastCellDp.second)
                 },
             )
+        }
+    }
+}
+
+@Composable
+private fun EditModeBar(frequentHidden: Boolean, onToggleFrequent: () -> Unit, onDone: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).testTag("edit_mode_bar"),
+    ) {
+        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (frequentHidden) "Modo edición" else "Arrastra «Frecuentes» arriba, abajo o a un lado",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onToggleFrequent) { Text(if (frequentHidden) "Mostrar Frecuentes" else "Ocultar") }
+            FilledTonalButton(onClick = onDone, modifier = Modifier.testTag("edit_done")) { Text("Listo") }
         }
     }
 }

@@ -120,6 +120,9 @@ import com.minimal.launcher.ui.components.LauncherMenu
 import com.minimal.launcher.ui.components.LocalAppActions
 import com.minimal.launcher.ui.components.MenuAction
 import com.minimal.launcher.ui.components.detectLauncherGestures
+import com.minimal.launcher.ui.components.AppRow
+import com.minimal.launcher.data.prefs.FrequentPosition
+import androidx.compose.material.icons.outlined.PushPin
 import kotlinx.coroutines.launch
 
 /** Lets the drawer hand an app over to the home screen when the user drags it out. */
@@ -251,6 +254,8 @@ fun AppDrawer(
                     if (inCategory != null && !inCategory.isUnclassified) {
                         add(MenuAction("Quitar de ${inCategory.name}", Icons.Outlined.RemoveCircleOutline) { vm.removeAppFromCategory(app, inCategory.id) })
                     }
+                    val pinned = app.key in settings.pinnedFrequent
+                    add(MenuAction(if (pinned) "Quitar de Frecuentes" else "Fijar en Frecuentes", Icons.Outlined.PushPin) { vm.setFrequentPinned(app.key, !pinned) })
                     add(MenuAction("Información de la app", Icons.Outlined.Info) { actions.openAppInfo(app) })
                     add(MenuAction("Ocultar", Icons.Outlined.VisibilityOff) { vm.hideApp(app.key) })
                     add(MenuAction("Desinstalar", Icons.Outlined.DeleteOutline) { actions.uninstall(app) })
@@ -274,6 +279,20 @@ fun AppDrawer(
                     )
                 }
             } else {
+                val frequent by vm.frequentApps.collectAsState()
+                if (settings.frequentPosition != FrequentPosition.HIDDEN) {
+                    AppRow(
+                        title = "Frecuentes",
+                        apps = frequent,
+                        iconSize = profile.drawerIconSize * 0.85f,
+                        labelStyle = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                        showLabels = settings.showDrawerLabels,
+                        onLaunch = vm::launch,
+                        menuFor = { menuFor(it, null) },
+                        testTag = "frequent_drawer",
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
                 SingleChoiceSegmentedButtonRow(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp).widthIn(max = 420.dp).fillMaxWidth().padding(horizontal = 16.dp)) {
                     SegmentedButton(
                         selected = settings.drawerTab == DrawerTab.CATEGORIES,

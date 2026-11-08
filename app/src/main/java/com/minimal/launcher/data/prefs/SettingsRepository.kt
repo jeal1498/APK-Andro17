@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.map
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 enum class AppSort { ALPHABETICAL, ALPHABETICAL_DESC, RECENTLY_INSTALLED }
 enum class DrawerTab { CATEGORIES, ALL }
+enum class FrequentPosition { TOP, BOTTOM, SIDEBAR, HIDDEN }
 
 data class LauncherSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -36,6 +37,10 @@ data class LauncherSettings(
     val defaultsCreated: Boolean = false,
     /** Learn which apps are opened when (local only) for Frecuentes / Sugeridas. */
     val learnUsage: Boolean = true,
+    val frequentPosition: FrequentPosition = FrequentPosition.TOP,
+    val frequentCount: Int = 5,
+    /** Apps pinned to Frecuentes by hand, in order. */
+    val pinnedFrequent: List<String> = emptyList(),
 )
 
 
@@ -67,6 +72,9 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val defaults = booleanPreferencesKey("defaults_created")
         val taxonomy = intPreferencesKey("category_taxonomy_version")
         val learnUsage = booleanPreferencesKey("learn_usage")
+        val frequentPosition = stringPreferencesKey("frequent_position")
+        val frequentCount = intPreferencesKey("frequent_count")
+        val pinnedFrequent = stringPreferencesKey("pinned_frequent")
     }
 
     val settings: Flow<LauncherSettings> = store.data.map { p ->
@@ -86,6 +94,9 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             showSearchBar = p[Keys.searchBar] ?: true,
             defaultsCreated = p[Keys.defaults] ?: false,
             learnUsage = p[Keys.learnUsage] ?: true,
+            frequentPosition = p[Keys.frequentPosition]?.let { runCatching { FrequentPosition.valueOf(it) }.getOrNull() } ?: FrequentPosition.TOP,
+            frequentCount = (p[Keys.frequentCount] ?: 5).coerceIn(5, 8),
+            pinnedFrequent = p[Keys.pinnedFrequent].orEmpty().split('\n').filter { it.isNotEmpty() },
         )
     }
 
@@ -107,6 +118,12 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     suspend fun setAllowRotation(allow: Boolean) = store.edit { it[Keys.rotation] = allow }
     suspend fun setShowSearchBar(show: Boolean) = store.edit { it[Keys.searchBar] = show }
     suspend fun setLearnUsage(enabled: Boolean) = store.edit { it[Keys.learnUsage] = enabled }
+    suspend fun setFrequentPosition(position: FrequentPosition) = store.edit { it[Keys.frequentPosition] = position.name }
+    suspend fun setFrequentCount(count: Int) = store.edit { it[Keys.frequentCount] = count.coerceIn(5, 8) }
+    suspend fun setFrequentPinned(appKey: String, pinned: Boolean) = store.edit {
+        val current = it[Keys.pinnedFrequent].orEmpty().split('\n').filter { k -> k.isNotEmpty() && k != appKey }
+        it[Keys.pinnedFrequent] = (if (pinned) current + appKey else current).joinToString("\n")
+    }
     suspend fun setDefaultsCreated() = store.edit { it[Keys.defaults] = true }
 
     /** Built-in category taxonomy version; 1 = installations created before the versioning existed. */
