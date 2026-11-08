@@ -40,6 +40,7 @@ class HomeRoleTest {
         val allowed = setOf(
             "android.permission.REQUEST_DELETE_PACKAGES",
             "android.permission.EXPAND_STATUS_BAR",
+            "android.permission.READ_CONTACTS", // optional, requested only from the search
         )
         assertTrue("Unexpected permissions: $requested", requested.all {
             it in allowed || it.endsWith(".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")

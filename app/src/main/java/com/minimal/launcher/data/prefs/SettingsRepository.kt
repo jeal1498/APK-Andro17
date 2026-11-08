@@ -47,6 +47,8 @@ data class LauncherSettings(
     /** The guided accessibility dialog is shown only once. */
     val accessibilityPrompted: Boolean = false,
     val showSuggestions: Boolean = true,
+    /** The user said no to searching contacts: do not offer it again. */
+    val contactsSearchDismissed: Boolean = false,
     /** [com.minimal.launcher.usage.Suggestions.dismissKey] of suggestions the user discarded. */
     val dismissedSuggestions: Set<String> = emptySet(),
     val gestures: Map<HomeGesture, GestureAction> = HomeGesture.entries.associateWith { GestureAction.defaultFor(it) },
@@ -88,6 +90,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val pinnedFrequent = stringPreferencesKey("pinned_frequent")
         val a11yPrompted = booleanPreferencesKey("accessibility_prompted")
         val showSuggestions = booleanPreferencesKey("show_suggestions")
+        val contactsDismissed = booleanPreferencesKey("contacts_search_dismissed")
         val dismissedSuggestions = stringSetPreferencesKey("dismissed_suggestions")
     }
 
@@ -112,6 +115,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             frequentCount = (p[Keys.frequentCount] ?: 5).coerceIn(5, 8),
             accessibilityPrompted = p[Keys.a11yPrompted] ?: false,
             showSuggestions = p[Keys.showSuggestions] ?: true,
+            contactsSearchDismissed = p[Keys.contactsDismissed] ?: false,
             dismissedSuggestions = p[Keys.dismissedSuggestions].orEmpty(),
             gestures = HomeGesture.entries.associateWith { g -> GestureAction.decode(p[gestureKey(g)]) ?: GestureAction.defaultFor(g) },
             pinnedFrequent = p[Keys.pinnedFrequent].orEmpty().split('\n').filter { it.isNotEmpty() },
@@ -149,6 +153,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     suspend fun setShowSuggestions(show: Boolean) = store.edit { it[Keys.showSuggestions] = show }
     suspend fun dismissSuggestion(key: String) = store.edit { it[Keys.dismissedSuggestions] = it[Keys.dismissedSuggestions].orEmpty() + key }
     suspend fun clearDismissedSuggestions() = store.edit { it.remove(Keys.dismissedSuggestions) }
+    suspend fun setContactsSearchDismissed() = store.edit { it[Keys.contactsDismissed] = true }
     suspend fun setDefaultsCreated() = store.edit { it[Keys.defaults] = true }
 
     /** Built-in category taxonomy version; 1 = installations created before the versioning existed. */

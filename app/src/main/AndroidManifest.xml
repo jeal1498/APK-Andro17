@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- Gesture "open notifications" when the accessibility service is off (normal permission, no prompt). -->
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+    <!-- Optional (asked from the search only if the user wants it): contacts in the universal search. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <!--
         Package visibility (Android 11+): declare only what the launcher needs instead of
@@ -28,6 +30,17 @@
         </intent>
         <intent>
             <action android:name="android.media.action.STILL_IMAGE_CAMERA" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.WEB_SEARCH" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
         </intent>
         <intent>
             <action android:name="android.intent.action.SET_WALLPAPER" />

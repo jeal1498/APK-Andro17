@@ -219,6 +219,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun deletePair(id: Long) = viewModelScope.launch { container.pairs.delete(id) }
     fun setPairCategory(id: Long, categoryId: Long?) = viewModelScope.launch { container.pairs.setCategory(id, categoryId) }
 
+    // ---- Universal search --------------------------------------------------------------------
+
+    fun runSearchItem(item: com.minimal.launcher.search.SearchItem) {
+        if (item is com.minimal.launcher.search.SearchItem.QuickAction && item.kind == com.minimal.launcher.search.SearchItem.QuickAction.Kind.FLASHLIGHT) {
+            container.systemActions.toggleFlashlight(); return
+        }
+        val intent = com.minimal.launcher.search.UniversalSearch.intentFor(item) ?: return
+        val pm = getApplication<Application>().packageManager
+        val web = item is com.minimal.launcher.search.SearchItem.QuickAction && item.kind == com.minimal.launcher.search.SearchItem.QuickAction.Kind.WEB
+        if (web && intent.resolveActivity(pm) == null) container.actions.startIntent(com.minimal.launcher.search.UniversalSearch.webFallback((item as com.minimal.launcher.search.SearchItem.QuickAction).value))
+        else container.actions.startIntent(intent)
+    }
+
+    fun dismissContactsSearch() = viewModelScope.launch { container.settings.setContactsSearchDismissed() }
+
     fun hideApp(appKey: String) = viewModelScope.launch { container.hiddenApps.hide(HiddenAppEntity(appKey)) }
     fun unhideApp(appKey: String) = viewModelScope.launch { container.hiddenApps.unhide(appKey) }
 

@@ -116,6 +116,10 @@ import com.minimal.launcher.data.prefs.AppSort
 import com.minimal.launcher.data.prefs.DrawerTab
 import com.minimal.launcher.data.prefs.LauncherSettings
 import com.minimal.launcher.search.AppSearch
+import com.minimal.launcher.search.Contact
+import com.minimal.launcher.search.ContactsSearch
+import com.minimal.launcher.search.UniversalSearch
+import com.minimal.launcher.search.UniversalResults
 import com.minimal.launcher.ui.DeviceProfile
 import com.minimal.launcher.ui.components.AppIconImage
 import com.minimal.launcher.ui.components.AppTile
@@ -169,6 +173,21 @@ fun AppDrawer(
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val actions = LocalAppActions.current
+
+    // Universal search: contacts (optional permission), system settings and quick actions.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var contactsGranted by remember { mutableStateOf(ContactsSearch.hasPermission(context)) }
+    val contactsPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted -> contactsGranted = granted; if (!granted) vm.dismissContactsSearch() }
+    var contacts by remember { mutableStateOf(emptyList<Contact>()) }
+    LaunchedEffect(query, contactsGranted) {
+        contacts = emptyList()
+        if (query.isBlank() || !contactsGranted) return@LaunchedEffect
+        kotlinx.coroutines.delay(120)
+        contacts = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ContactsSearch.search(context, UniversalSearch.contactQuery(query)) }
+    }
+    val universal = remember(query, contacts) { UniversalSearch.search(query, contacts) }
 
     val closing = progress.targetValue == 0f
     LaunchedEffect(closing) {
@@ -249,7 +268,10 @@ fun AppDrawer(
                 query = query,
                 onQuery = { query = it },
                 focusRequester = focusRequester,
-                onSubmit = { AppSearch.search(apps, query).firstOrNull()?.let { vm.launch(it) } },
+                onSubmit = {
+                    val app = AppSearch.search(apps, query).firstOrNull()
+                    if (app != null) vm.launch(app) else universal.firstOrNull()?.let(vm::runSearchItem)
+                },
                 sort = settings.appSort,
                 onSort = vm::setAppSort,
                 onSettings = { actions.startIntent(android.content.Intent(vm.getApplication(), com.minimal.launcher.settings.SettingsActivity::class.java)) },
@@ -287,16 +309,22 @@ fun AppDrawer(
 
             if (query.isNotBlank()) {
                 val results = remember(apps, query) { AppSearch.search(apps, query) }
-                if (results.isEmpty()) {
-                    EmptyState("No se encontraron apps para “$query”")
-                } else {
-                    AppGrid(
-                        apps = results, columns = profile.drawerColumns, iconSize = profile.drawerIconSize,
-                        showLabels = settings.showDrawerLabels, contentPadding = gridPadding,
-                        onLaunch = vm::launch, menuFor = { menuFor(it, null) }, dragCallbacks = dragCallbacks,
-                        testTag = "search_results",
-                    )
-                }
+                AppGrid(
+                    apps = results, columns = profile.drawerColumns, iconSize = profile.drawerIconSize,
+                    showLabels = settings.showDrawerLabels, contentPadding = gridPadding,
+                    onLaunch = vm::launch, menuFor = { menuFor(it, null) }, dragCallbacks = dragCallbacks,
+                    testTag = "search_results",
+                    header = if (results.isEmpty()) { { EmptyState("No se encontraron apps para “$query”") } } else null,
+                    footer = {
+                        UniversalResults(
+                            items = universal,
+                            askContacts = !contactsGranted && !settings.contactsSearchDismissed,
+                            onAskContacts = { contactsPermission.launch(android.Manifest.permission.READ_CONTACTS) },
+                            onDismissContacts = vm::dismissContactsSearch,
+                            onClick = vm::runSearchItem,
+                        )
+                    },
+                )
             } else {
                 val frequent by vm.frequentApps.collectAsState()
                 if (settings.frequentPosition != FrequentPosition.HIDDEN) {
@@ -509,6 +537,7 @@ fun AppGrid(
     dragCallbacks: DrawerDragCallbacks,
     testTag: String,
     header: (@Composable () -> Unit)? = null,
+    footer: (@Composable () -> Unit)? = null,
     pairs: List<AppPair> = emptyList(),
     onLaunchPair: (AppPair) -> Unit = {},
     pairMenuFor: (AppPair) -> List<MenuAction> = { emptyList() },
@@ -526,6 +555,7 @@ fun AppGrid(
         items(apps, key = { it.key }) { app ->
             DrawerAppItem(app, iconSize, showLabels, onLaunch, menuFor, dragCallbacks)
         }
+        if (footer != null) item(span = { GridItemSpan(maxLineSpan) }, key = "footer") { footer() }
     }
 }
 
