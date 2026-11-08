@@ -44,12 +44,16 @@ class SplitScreenLauncher(
         val third = pair.apps.getOrNull(2)
         scope.launch(Dispatchers.Main) {
             actions.launch(a)
-            delay(STEP_MS)
-            if (service.isSplitScreenActive() != true && !service.toggleSplitScreen()) {
-                toast("Este dispositivo no permitió activar la pantalla dividida")
-                return@launch
+            delay(FOCUS_MS) // let app A come to the foreground and take focus
+            var active = service.isSplitScreenActive() == true
+            var attempt = 0
+            while (!active && attempt < 3) {
+                attempt++
+                service.toggleSplitScreen()
+                delay(FOCUS_MS)
+                active = service.isSplitScreenActive() == true
             }
-            delay(STEP_MS)
+            if (!active) Log.w(TAG, "split divider not detected after $attempt attempts; launching B adjacent anyway")
             startAdjacent(service, b)
             if (third != null) {
                 delay(STEP_MS)
@@ -121,6 +125,7 @@ class SplitScreenLauncher(
     private companion object {
         const val TAG = "SplitScreenLauncher"
         const val STEP_MS = 650L
+        const val FOCUS_MS = 1000L
         const val CHECK_MS = 1200L
     }
 }

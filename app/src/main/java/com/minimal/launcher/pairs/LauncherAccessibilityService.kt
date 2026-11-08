@@ -41,16 +41,10 @@ class LauncherAccessibilityService : AccessibilityService() {
 
     fun openQuickSettings(): Boolean = performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
 
+    /** True only when the system split-screen divider window exists (floating windows don't count). */
     fun isSplitScreenActive(): Boolean? = runCatching {
-        windows.any { it.type == AccessibilityWindowInfo.TYPE_SPLIT_SCREEN_DIVIDER } ||
-            windows.count { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isSplitCandidate() } >= 2
+        windows.any { it.type == AccessibilityWindowInfo.TYPE_SPLIT_SCREEN_DIVIDER }
     }.getOrNull()
-
-    private fun AccessibilityWindowInfo.isSplitCandidate(): Boolean {
-        val r = android.graphics.Rect().also { getBoundsInScreen(it) }
-        val m = resources.displayMetrics
-        return r.width() < m.widthPixels * 0.9f || r.height() < m.heightPixels * 0.9f
-    }
 
     companion object {
         @Volatile
