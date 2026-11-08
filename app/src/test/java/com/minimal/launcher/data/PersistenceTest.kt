@@ -5,7 +5,10 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.minimal.launcher.LauncherApplication
 import com.minimal.launcher.categories.BuiltinCategory
+import com.minimal.launcher.categories.CATEGORY_TAXONOMY_VERSION
 import com.minimal.launcher.categories.CategoryRepository
+import com.minimal.launcher.categories.TaxonomyVersionStore
+import com.minimal.launcher.data.db.CategoryEntity
 import com.minimal.launcher.data.db.HomeItemEntity
 import com.minimal.launcher.data.db.HomeItemEntity.Companion.CONTAINER_DESKTOP
 import com.minimal.launcher.data.db.HomeItemEntity.Companion.CONTAINER_DOCK
@@ -60,6 +63,59 @@ class PersistenceTest {
         storeScope.cancel()
         context.deleteDatabase(dbName)
         prefsFile.delete()
+    }
+
+    @Test fun legacyTaxonomyIsMigratedWithoutLosingManualData() = runBlocking {
+        var db = openDb()
+        // A v1 installation: old built-ins (one renamed by the user) + a custom category + manual assignments.
+        val legacy = listOf(
+            "communication" to "Comunicación", "social" to "Social", "work" to "Mi trabajo", "finance" to "Finanzas",
+            "entertainment" to "Entretenimiento", "games" to "Juegos", "tools" to "Herramientas", "shopping" to "Compras",
+            "navigation" to "Navegación", "photography" to "Fotografía", "education" to "Educación",
+        )
+        legacy.forEachIndexed { i, (key, name) ->
+            db.categoryDao().insert(CategoryEntity(name = name, iconKey = "folder", position = i, builtinKey = key))
+        }
+        val customId = db.categoryDao().insert(CategoryEntity(name = "Deportes", iconKey = "health", position = 11))
+        val gamesId = db.categoryDao().getAll().first { it.builtinKey == "games" }.id
+        val settings = openSettings()
+        val store = object : TaxonomyVersionStore {
+            override suspend fun get() = settings.categoryTaxonomyVersion()
+            override suspend fun set(version: Int) { settings.setCategoryTaxonomyVersion(version) }
+        }
+        var repo = CategoryRepository(db.categoryDao(), db.assignmentDao(), store)
+        repo.setManualCategories("com.zorblax/.Main#0", setOf(gamesId, customId))
+        assertEquals(1, settings.categoryTaxonomyVersion())
+
+        repo.ensureDefaults()
+        repo.ensureDefaults() // runs once
+        val cats = db.categoryDao().getAll()
+        // The 13 built-ins first, in order, then the retired "Juegos" (kept: it has manual data) and the custom one.
+        assertEquals(BuiltinCategory.entries.map { it.key }, cats.take(13).map { it.builtinKey })
+        assertEquals(listOf("Juegos", "Deportes"), cats.drop(13).map { it.name })
+        assertNull(cats.firstOrNull { it.name == "Fotografía" })
+        assertEquals("Mi trabajo", cats.first { it.builtinKey == "work" }.name) // user rename kept
+        assertEquals("Redes sociales", cats.first { it.builtinKey == "social" }.name)
+        assertEquals("Finanzas personales", cats.first { it.builtinKey == "finance" }.name)
+        assertEquals(cats.map { it.id }.distinct().size, cats.size)
+        assertEquals(setOf(gamesId, customId), db.assignmentDao().assignmentsFor("com.zorblax/.Main#0").map { it.categoryId }.toSet())
+        assertEquals(CATEGORY_TAXONOMY_VERSION, settings.categoryTaxonomyVersion())
+        closeSettings()
+        db.close()
+
+        // After a restart nothing changes (and a deleted built-in is not resurrected).
+        db = openDb()
+        val settings2 = openSettings()
+        repo = CategoryRepository(db.categoryDao(), db.assignmentDao(), object : TaxonomyVersionStore {
+            override suspend fun get() = settings2.categoryTaxonomyVersion()
+            override suspend fun set(version: Int) { settings2.setCategoryTaxonomyVersion(version) }
+        })
+        val google = db.categoryDao().getAll().first { it.builtinKey == "google" }.id
+        repo.delete(google)
+        repo.ensureDefaults()
+        assertEquals(cats.size - 1, db.categoryDao().getAll().size)
+        closeSettings()
+        db.close()
     }
 
     @Test fun categoriesAndManualAssignmentsSurviveRestart() = runBlocking {

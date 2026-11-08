@@ -3,6 +3,10 @@ package com.minimal.launcher.ui.components
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.AccountBalance
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.DirectionsBus
+import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.CameraAlt
@@ -27,6 +31,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 /** Icons available for categories (Material Symbols via material-icons-extended). */
 object CategoryIcons {
     val all: List<Pair<String, ImageVector>> = listOf(
+        "google" to Icons.Outlined.Search,
+        "ai" to Icons.Outlined.AutoAwesome,
+        "driving" to Icons.Outlined.DirectionsCar,
         "chat" to Icons.Outlined.ChatBubbleOutline,
         "people" to Icons.Outlined.People,
         "work" to Icons.Outlined.Work,
@@ -35,6 +42,7 @@ object CategoryIcons {
         "games" to Icons.Outlined.SportsEsports,
         "build" to Icons.Outlined.Build,
         "shopping" to Icons.Outlined.ShoppingBag,
+        "transport" to Icons.Outlined.DirectionsBus,
         "map" to Icons.Outlined.Map,
         "camera" to Icons.Outlined.CameraAlt,
         "school" to Icons.Outlined.School,

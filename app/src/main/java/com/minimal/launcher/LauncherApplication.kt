@@ -6,6 +6,7 @@ import com.minimal.launcher.applications.AppActions
 import com.minimal.launcher.applications.AppRepository
 import com.minimal.launcher.applications.IconCache
 import com.minimal.launcher.categories.CategoryRepository
+import com.minimal.launcher.categories.TaxonomyVersionStore
 import com.minimal.launcher.data.db.HiddenAppDao
 import com.minimal.launcher.data.db.LauncherDatabase
 import com.minimal.launcher.data.prefs.SettingsRepository
@@ -25,7 +26,14 @@ class AppContainer(context: Context) {
     val apps = AppRepository(appContext, scope)
     val icons = IconCache(appContext, apps)
     val actions = AppActions(appContext)
-    val categories = CategoryRepository(database.categoryDao(), database.assignmentDao())
+    val categories = CategoryRepository(
+        database.categoryDao(),
+        database.assignmentDao(),
+        object : TaxonomyVersionStore {
+            override suspend fun get() = settings.categoryTaxonomyVersion()
+            override suspend fun set(version: Int) { settings.setCategoryTaxonomyVersion(version) }
+        },
+    )
     val hiddenApps: HiddenAppDao = database.hiddenAppDao()
     val home = HomeRepository(database, settings)
     val widgets = WidgetManager(appContext)

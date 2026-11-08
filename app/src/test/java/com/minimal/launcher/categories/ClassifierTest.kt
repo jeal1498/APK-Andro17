@@ -14,22 +14,24 @@ class ClassifierTest {
     @Test fun knownPackagesAreClassified() {
         assertEquals(idOf(BuiltinCategory.COMMUNICATION), classify("WhatsApp", "com.whatsapp"))
         assertEquals(idOf(BuiltinCategory.SOCIAL), classify("Instagram", "com.instagram.android"))
-        assertEquals(idOf(BuiltinCategory.NAVIGATION), classify("Maps", "com.google.android.apps.maps"))
-        assertEquals(idOf(BuiltinCategory.ENTERTAINMENT), classify("YouTube", "com.google.android.youtube"))
-        assertEquals(idOf(BuiltinCategory.PHOTOGRAPHY), classify("Fotos", "com.google.android.apps.photos"))
+        assertEquals(idOf(BuiltinCategory.NAVIGATION), classify("Waze", "com.waze"))
+        assertEquals(idOf(BuiltinCategory.ENTERTAINMENT), classify("Netflix", "com.netflix.mediaclient"))
+        assertEquals(idOf(BuiltinCategory.HEALTH), classify("Strava", "com.strava"))
         assertEquals(idOf(BuiltinCategory.TOOLS), classify("Ajustes", "com.android.settings"))
         assertEquals(idOf(BuiltinCategory.WORK), classify("Slack", "com.Slack"))
     }
 
     @Test fun packagePrefixMatchesPublishers() {
-        assertEquals(idOf(BuiltinCategory.GAMES), classify("Clash Royale", "com.supercell.clashroyale"))
+        assertEquals(idOf(BuiltinCategory.ENTERTAINMENT), classify("Clash Royale", "com.supercell.clashroyale"))
         assertEquals(idOf(BuiltinCategory.SHOPPING), classify("Mercado Libre", "com.mercadolibre.android"))
     }
 
     @Test fun keywordsInPackageAndLabel() {
         assertEquals(idOf(BuiltinCategory.FINANCE), classify("Mi Banco", "mx.example.banking"))
         assertEquals(idOf(BuiltinCategory.EDUCATION), classify("Aprender Inglés", "org.example.lingo"))
-        assertEquals(idOf(BuiltinCategory.PHOTOGRAPHY), classify("Super Cámara HD", "com.foo.bar"))
+        assertEquals(idOf(BuiltinCategory.TOOLS), classify("Super Cámara HD", "com.foo.bar"))
+        assertEquals(idOf(BuiltinCategory.HEALTH), classify("Smart Fit", "com.example.gymapp"))
+        assertEquals(idOf(BuiltinCategory.EDUCATION), classify("EPUB Reader", "com.example.books"))
         assertEquals(idOf(BuiltinCategory.TOOLS), classify("QR Scanner", "com.acme.qr"))
     }
 
@@ -39,7 +41,7 @@ class ClassifierTest {
     }
 
     @Test fun systemCategoryIsUsedAsFallback() {
-        assertEquals(idOf(BuiltinCategory.GAMES), classify("Zorblax", "com.zorblax.app", Classifier.CATEGORY_GAME))
+        assertEquals(idOf(BuiltinCategory.ENTERTAINMENT), classify("Zorblax", "com.zorblax.app", Classifier.CATEGORY_GAME))
         assertEquals(idOf(BuiltinCategory.NAVIGATION), classify("Zorblax", "com.zorblax.app", Classifier.CATEGORY_MAPS))
     }
 
@@ -68,7 +70,57 @@ class ClassifierTest {
         assertEquals(listOf("super", "camera", "hd"), Classifier.tokenize("superCamera2HD"))
     }
 
+    private fun all(label: String, pkg: String) = Classifier.classifyAll(Classifier.AppSignals(label, pkg), targets)
+    private fun ids(vararg c: BuiltinCategory) = c.map(::idOf)
+
+    @Test fun googleAppsGoToGoogleFirstWithCuratedSecondary() {
+        assertEquals(ids(BuiltinCategory.GOOGLE, BuiltinCategory.NAVIGATION), all("Maps", "com.google.android.apps.maps"))
+        assertEquals(ids(BuiltinCategory.GOOGLE, BuiltinCategory.COMMUNICATION), all("Gmail", "com.google.android.gm"))
+        assertEquals(ids(BuiltinCategory.GOOGLE, BuiltinCategory.TOOLS), all("Chrome", "com.android.chrome"))
+        assertEquals(ids(BuiltinCategory.GOOGLE, BuiltinCategory.TOOLS), all("Play Store", "com.android.vending"))
+        assertEquals(ids(BuiltinCategory.GOOGLE, BuiltinCategory.ENTERTAINMENT), all("YouTube", "com.google.android.youtube"))
+        assertEquals(ids(BuiltinCategory.GOOGLE, BuiltinCategory.FINANCE), all("Wallet", "com.google.android.apps.walletnfcrel"))
+        assertEquals(ids(BuiltinCategory.GOOGLE), all("Fotos", "com.google.android.apps.photos"))
+        // Google Translate stays in Google; non-Google translators go to Lectura y educación.
+        assertEquals(ids(BuiltinCategory.GOOGLE), all("Traductor", "com.google.android.apps.translate"))
+        assertEquals(ids(BuiltinCategory.EDUCATION), all("DeepL", "com.deepl.mobiletranslator"))
+        // Waze (Google-owned, not Google-branded) stays in Transporte.
+        assertEquals(ids(BuiltinCategory.NAVIGATION), all("Waze", "com.waze"))
+    }
+
+    @Test fun aiAppsAreAiFirst() {
+        assertEquals(ids(BuiltinCategory.AI), all("ChatGPT", "com.openai.chatgpt"))
+        assertEquals(ids(BuiltinCategory.AI), all("Claude", "com.anthropic.claude"))
+        assertEquals(ids(BuiltinCategory.AI, BuiltinCategory.GOOGLE), all("Gemini", "com.google.android.apps.bard"))
+        assertEquals(ids(BuiltinCategory.AI, BuiltinCategory.GOOGLE), all("NotebookLM", "com.google.android.apps.labs.language.tailwind"))
+        assertEquals(ids(BuiltinCategory.AI), all("Copilot", "com.microsoft.copilot"))
+        assertEquals(ids(BuiltinCategory.AI), all("DeepSeek", "com.example.unknown"))
+        assertEquals(ids(BuiltinCategory.AI), all("Perplexity", "ai.perplexity.app.android"))
+    }
+
+    @Test fun drivingAppsAreExclusiveAndNotConfusedWithPassengerApps() {
+        assertEquals(ids(BuiltinCategory.DRIVING), all("Driver", "com.ubercab.driver"))
+        assertEquals(ids(BuiltinCategory.DRIVING), all("DiDi Conductor", "com.didiglobal.driver"))
+        assertEquals(ids(BuiltinCategory.NAVIGATION), all("Uber", "com.ubercab"))
+        assertEquals(ids(BuiltinCategory.NAVIGATION), all("DiDi", "com.didiglobal.passenger"))
+        assertEquals(ids(BuiltinCategory.SHOPPING), all("Uber Eats", "com.ubercab.eats"))
+        // The user's work apps, whatever their (unknown) package is.
+        assertEquals(ids(BuiltinCategory.DRIVING), all("Checa", "org.chromium.webapk.a1b2"))
+        assertEquals(ids(BuiltinCategory.DRIVING), all("Finanzas", "com.example.whatever"))
+        assertEquals(ids(BuiltinCategory.DRIVING), all("Garaje", "com.example.other"))
+        // A banking app is not a driving app.
+        assertEquals(ids(BuiltinCategory.FINANCE), all("BBVA México", "com.bancomer.mbanking"))
+        assertEquals(ids(BuiltinCategory.FINANCE), all("Mis Finanzas Banco", "com.acme.bank"))
+    }
+
+    @Test fun classifyAllHasNoDuplicates() {
+        val r = all("Gemini", "com.google.android.apps.bard")
+        assertEquals(r.distinct(), r)
+    }
+
     @Test fun genericTokensDoNotClassify() {
-        assertNull(classify("Thing", "com.google.android.apps.thing"))
+        assertNull(classify("Thing", "org.mobile.apps.thing"))
+        // A generic com.google.* package is still an official Google app.
+        assertEquals(idOf(BuiltinCategory.GOOGLE), classify("Thing", "com.google.android.apps.thing"))
     }
 }

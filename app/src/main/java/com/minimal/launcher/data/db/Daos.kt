@@ -46,6 +46,9 @@ interface AssignmentDao {
     @Query("SELECT appKey FROM manual_apps")
     fun observeManualApps(): Flow<List<String>>
 
+    @Query("SELECT * FROM app_assignments")
+    suspend fun allAssignments(): List<AppAssignmentEntity>
+
     @Query("SELECT * FROM app_assignments WHERE appKey = :appKey")
     suspend fun assignmentsFor(appKey: String): List<AppAssignmentEntity>
 

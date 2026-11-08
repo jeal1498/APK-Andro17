@@ -24,7 +24,8 @@ data class Resolution(val categoryIds: Set<Long>, val source: AssignmentSource)
 /**
  * Pure resolution logic. Hierarchy:
  *  1. Explicit manual assignment (even an empty one) — never overwritten by rules.
- *  2. Automatic local rule.
+ *  2. Special rules (Conducción > Inteligencia artificial > Google), then automatic local rules.
+ *     An app can get several automatic categories; the first is the primary.
  *  3. Unclassified.
  */
 object CategoryResolver {
@@ -49,11 +50,11 @@ object CategoryResolver {
             return if (ids.isEmpty()) Resolution(emptySet(), AssignmentSource.UNCLASSIFIED)
             else Resolution(ids, AssignmentSource.MANUAL)
         }
-        val auto = Classifier.classify(
+        val auto = Classifier.classifyAll(
             Classifier.AppSignals(app.label, app.packageName, app.systemCategory),
             targets,
         )
-        return if (auto != null) Resolution(setOf(auto), AssignmentSource.AUTOMATIC)
+        return if (auto.isNotEmpty()) Resolution(LinkedHashSet(auto), AssignmentSource.AUTOMATIC)
         else Resolution(emptySet(), AssignmentSource.UNCLASSIFIED)
     }
 

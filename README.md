@@ -59,13 +59,13 @@ Configura `local.properties` con `sdk.dir=/ruta/al/android-sdk` (plataforma 37 y
 **Cajón inteligente**
 - Pestañas *Categorías* / *Todas*, búsqueda (sin acentos, por prefijo/palabra/contenido/paquete; *Ir* abre el primer resultado).
 - Carpetas de categoría con icono, nombre, número de apps y vista previa 2×2; apertura animada.
-- Categorías iniciales: Comunicación, Social, Trabajo, Finanzas, Entretenimiento, Juegos, Herramientas, Compras, Navegación, Fotografía, Educación y *Sin clasificar*.
+- 13 categorías iniciales: Google, Inteligencia artificial, Conducción, Comunicación, Redes sociales, Trabajo y productividad, Entretenimiento, Finanzas personales, Compras, Transporte y movilidad, Salud y ejercicio, Herramientas, Lectura y educación, más *Sin clasificar*. Las instalaciones anteriores se migran una sola vez (se respetan nombres/iconos personalizados, categorías propias y asignaciones manuales; Juegos/Fotografía se retiran salvo que tengan asignaciones manuales).
 - Crear, editar (nombre, icono, palabras clave), eliminar y reordenar categorías.
 - Menú de app: añadir a inicio/dock, categorías (multiselección), quitar de la categoría, información, ocultar, desinstalar. Arrastrar una app del cajón la coloca en inicio.
 - Orden A-Z, Z-A o instaladas recientemente.
 
 **Motor de clasificación híbrido (100 % local)**
-- Jerarquía: 1) asignación manual explícita → 2) regla automática → 3) sin clasificar. Una asignación manual (incluso “ninguna categoría”) nunca se sobrescribe.
+- Jerarquía: 1) asignación manual explícita → 2) reglas especiales (Conducción > IA > Google) → 3) regla automática → 4) sin clasificar. Una app puede tener varias categorías automáticas (p. ej. Gemini: IA + Google; Gmail: Google + Comunicación). Conducción es exclusiva (Uber Driver, DiDi Conductor, Checa, Finanzas, Garaje). Una asignación manual (incluso “ninguna categoría”) nunca se sobrescribe.
 - Señales automáticas: paquetes conocidos (incl. prefijos de editores de juegos), palabras clave del usuario por categoría, palabras clave en tokens del paquete y del nombre (ES/EN, sin acentos) y `ApplicationInfo.category`.
 - Asignaciones manuales en Room; la clasificación automática se recalcula de forma determinista. Restaurar automática por app o global.
 

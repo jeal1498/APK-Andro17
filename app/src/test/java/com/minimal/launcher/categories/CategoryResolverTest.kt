@@ -55,20 +55,36 @@ class CategoryResolverTest {
         assertEquals(listOf(whatsapp), groups.first { it.id == cat(BuiltinCategory.COMMUNICATION) }.apps)
     }
 
+    @Test fun automaticMultiCategoryAndManualOverridesSpecialRules() {
+        val gemini = app("com.google.android.apps.bard", "Gemini")
+        val targets = CategoryResolver.targets(categories)
+        val auto = CategoryResolver.resolve(gemini, targets, emptySet(), emptyMap())
+        assertEquals(listOf(cat(BuiltinCategory.AI), cat(BuiltinCategory.GOOGLE)), auto.categoryIds.toList())
+        // A later manual assignment is never overwritten by the special rules.
+        val manual = mapOf(gemini.key to setOf(cat(BuiltinCategory.WORK)))
+        val r = CategoryResolver.resolve(gemini, targets, setOf(gemini.key), manual)
+        assertEquals(AssignmentSource.MANUAL, r.source)
+        assertEquals(setOf(cat(BuiltinCategory.WORK)), r.categoryIds)
+        val groups = CategoryResolver.group(listOf(gemini), categories, emptyList(), emptySet())
+        assertEquals(listOf(gemini), groups.first { it.id == cat(BuiltinCategory.AI) }.apps)
+        assertEquals(listOf(gemini), groups.first { it.id == cat(BuiltinCategory.GOOGLE) }.apps)
+        assertEquals(2, groups.sumOf { g -> g.apps.count { it == gemini } })
+    }
+
     @Test fun groupAppliesManualMultiAssignment() {
         val assignments = listOf(
-            AppAssignmentEntity(unknown.key, cat(BuiltinCategory.GAMES)),
+            AppAssignmentEntity(unknown.key, cat(BuiltinCategory.HEALTH)),
             AppAssignmentEntity(unknown.key, cat(BuiltinCategory.TOOLS)),
         )
         val groups = CategoryResolver.group(listOf(unknown), categories, assignments, setOf(unknown.key))
-        assertEquals(listOf(unknown), groups.first { it.id == cat(BuiltinCategory.GAMES) }.apps)
+        assertEquals(listOf(unknown), groups.first { it.id == cat(BuiltinCategory.HEALTH) }.apps)
         assertEquals(listOf(unknown), groups.first { it.id == cat(BuiltinCategory.TOOLS) }.apps)
         assertTrue(groups.last().apps.isEmpty())
     }
 
     @Test fun assignmentsToDeletedCategoriesAreIgnored() {
-        val remaining = categories.filterNot { it.builtinKey == BuiltinCategory.GAMES.key }
-        val assignments = listOf(AppAssignmentEntity(unknown.key, cat(BuiltinCategory.GAMES)))
+        val remaining = categories.filterNot { it.builtinKey == BuiltinCategory.HEALTH.key }
+        val assignments = listOf(AppAssignmentEntity(unknown.key, cat(BuiltinCategory.HEALTH)))
         val groups = CategoryResolver.group(listOf(unknown), remaining, assignments, setOf(unknown.key))
         assertEquals(listOf(unknown), groups.last().apps)
     }

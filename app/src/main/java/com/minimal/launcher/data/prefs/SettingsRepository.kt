@@ -63,6 +63,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val rotation = booleanPreferencesKey("allow_rotation")
         val searchBar = booleanPreferencesKey("search_bar")
         val defaults = booleanPreferencesKey("defaults_created")
+        val taxonomy = intPreferencesKey("category_taxonomy_version")
     }
 
     val settings: Flow<LauncherSettings> = store.data.map { p ->
@@ -102,4 +103,8 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     suspend fun setAllowRotation(allow: Boolean) = store.edit { it[Keys.rotation] = allow }
     suspend fun setShowSearchBar(show: Boolean) = store.edit { it[Keys.searchBar] = show }
     suspend fun setDefaultsCreated() = store.edit { it[Keys.defaults] = true }
+
+    /** Built-in category taxonomy version; 1 = installations created before the versioning existed. */
+    suspend fun categoryTaxonomyVersion(): Int = store.data.first()[Keys.taxonomy] ?: 1
+    suspend fun setCategoryTaxonomyVersion(version: Int) = store.edit { it[Keys.taxonomy] = version }
 }
