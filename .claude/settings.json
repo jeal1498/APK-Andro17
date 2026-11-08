@@ -1,0 +1,19 @@
+{
+  "extraKnownMarketplaces": {
+    "i-have-adhd": {
+      "source": { "source": "github", "repo": "ayghri/i-have-adhd" }
+    }
+  },
+  "enabledPlugins": {
+    "i-have-adhd@i-have-adhd": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "mkdir -p \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}\" && touch \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.i-have-adhd-always\"" }
+        ]
+      }
+    ]
+  }
+}
