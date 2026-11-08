@@ -75,3 +75,36 @@ data class HomeItemEntity(
         const val TYPE_CLOCK = 4
     }
 }
+
+/**
+ * How often an app is opened per time slot (see [com.minimal.launcher.usage.TimeSlots]) and day of week.
+ * Local only; feeds "Frecuentes" and "Sugeridas".
+ */
+@Entity(tableName = "app_usage", primaryKeys = ["appKey", "timeSlot", "dayOfWeek"], indices = [Index("appKey")])
+data class AppUsageEntity(
+    val appKey: String,
+    val timeSlot: Int,
+    /** 1 = Sunday … 7 = Saturday ([java.util.Calendar.DAY_OF_WEEK]). */
+    val dayOfWeek: Int,
+    val count: Int,
+    val lastOpened: Long,
+)
+
+/**
+ * A split-screen pair (2 apps) or trio (3rd app as a floating window). [apps] holds the app keys joined
+ * with [SEPARATOR]. [categoryId] null = automatic (category of the first app).
+ */
+@Entity(tableName = "app_pairs")
+data class AppPairEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val apps: String,
+    val categoryId: Long? = null,
+    val position: Int = 0,
+) {
+    val appKeys: List<String> get() = apps.split(SEPARATOR).filter { it.isNotEmpty() }
+
+    companion object {
+        const val SEPARATOR = "|"
+        fun encode(keys: List<String>): String = keys.joinToString(SEPARATOR)
+    }
+}

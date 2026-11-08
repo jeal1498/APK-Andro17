@@ -34,6 +34,8 @@ data class LauncherSettings(
     val allowRotation: Boolean = true,
     val showSearchBar: Boolean = true,
     val defaultsCreated: Boolean = false,
+    /** Learn which apps are opened when (local only) for Frecuentes / Sugeridas. */
+    val learnUsage: Boolean = true,
 )
 
 
@@ -64,6 +66,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val searchBar = booleanPreferencesKey("search_bar")
         val defaults = booleanPreferencesKey("defaults_created")
         val taxonomy = intPreferencesKey("category_taxonomy_version")
+        val learnUsage = booleanPreferencesKey("learn_usage")
     }
 
     val settings: Flow<LauncherSettings> = store.data.map { p ->
@@ -82,6 +85,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             allowRotation = p[Keys.rotation] ?: true,
             showSearchBar = p[Keys.searchBar] ?: true,
             defaultsCreated = p[Keys.defaults] ?: false,
+            learnUsage = p[Keys.learnUsage] ?: true,
         )
     }
 
@@ -102,6 +106,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     suspend fun setDrawerTab(tab: DrawerTab) = store.edit { it[Keys.tab] = tab.name }
     suspend fun setAllowRotation(allow: Boolean) = store.edit { it[Keys.rotation] = allow }
     suspend fun setShowSearchBar(show: Boolean) = store.edit { it[Keys.searchBar] = show }
+    suspend fun setLearnUsage(enabled: Boolean) = store.edit { it[Keys.learnUsage] = enabled }
     suspend fun setDefaultsCreated() = store.edit { it[Keys.defaults] = true }
 
     /** Built-in category taxonomy version; 1 = installations created before the versioning existed. */

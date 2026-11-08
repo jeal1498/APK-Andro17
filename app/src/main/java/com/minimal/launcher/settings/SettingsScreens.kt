@@ -110,70 +110,6 @@ fun SettingsNavHost(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SettingsScaffold(title: String, onBack: () -> Unit, testTag: String, content: LazyListScope.() -> Unit) {
-    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
-    Scaffold(
-        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection).testTag(testTag),
-        topBar = {
-            LargeTopAppBar(
-                title = { Text(title) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Atrás") } },
-                scrollBehavior = scroll,
-            )
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                Modifier.widthIn(max = 720.dp).fillMaxWidth(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                content = content,
-            )
-        }
-    }
-}
-
-private fun LazyListScope.section(title: String) {
-    item(key = "h_$title") {
-        Text(
-            title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp),
-        )
-    }
-}
-
-@Composable
-private fun SettingRow(
-    title: String,
-    summary: String? = null,
-    onClick: (() -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
-    testTag: String? = null,
-) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = Modifier.fillMaxWidth().then(if (testTag != null) Modifier.testTag(testTag) else Modifier),
-    ) {
-        ListItem(
-            headlineContent = { Text(title) },
-            supportingContent = summary?.let { { Text(it) } },
-            trailingContent = trailing,
-            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
-        )
-    }
-}
-
-@Composable
-private fun SwitchRow(title: String, summary: String?, checked: Boolean, testTag: String, onChange: (Boolean) -> Unit) {
-    SettingRow(title, summary, onClick = { onChange(!checked) }, trailing = { Switch(checked = checked, onCheckedChange = onChange) }, testTag = testTag)
-}
-
 @Composable
 private fun MainSettings(
     s: LauncherSettings,
@@ -188,7 +124,7 @@ private fun MainSettings(
     var gridDialog by remember { mutableStateOf(false) }
     var drawerColsDialog by remember { mutableStateOf(false) }
     var categoryColsDialog by remember { mutableStateOf(false) }
-    var sortDialog by remember { mutableStateOf(false) }
+    var confirmClearUsage by remember { mutableStateOf(false) }
     var confirmRestore by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
@@ -235,7 +171,9 @@ private fun MainSettings(
         item(key = "drawerCols") { SettingRow("Columnas de apps", if (s.drawerColumns == 0) "Automático" else "${s.drawerColumns}", onClick = { drawerColsDialog = true }, testTag = "drawer_columns") }
         item(key = "catCols") { SettingRow("Columnas de categorías", if (s.categoryColumns == 0) "Automático" else "${s.categoryColumns}", onClick = { categoryColsDialog = true }, testTag = "category_columns") }
         item(key = "drawerLabels") { SwitchRow("Mostrar nombres en el cajón", null, s.showDrawerLabels, "drawer_labels") { scope.launch { prefs.setShowDrawerLabels(it) } } }
-        item(key = "sort") { SettingRow("Orden de apps", sortLabel(s.appSort), onClick = { sortDialog = true }, testTag = "sort") }
+        item(key = "sort") {
+            ChoiceRow("Orden de apps", AppSort.entries.map { SettingOption(it, sortLabel(it)) }, s.appSort, "sort") { scope.launch { prefs.setAppSort(it) } }
+        }
         item(key = "tab") {
             SwitchRow("Abrir en categorías", "Si se desactiva, el cajón abre la lista completa", s.drawerTab == DrawerTab.CATEGORIES, "drawer_tab") {
                 scope.launch { prefs.setDrawerTab(if (it) DrawerTab.CATEGORIES else DrawerTab.ALL) }
@@ -246,6 +184,14 @@ private fun MainSettings(
         item(key = "cats") { SettingRow("Categorías", "Crear, editar, ordenar y eliminar", onClick = { navigate(Routes.CATEGORIES) }, testTag = "manage_categories") }
         item(key = "hidden") { SettingRow("Apps ocultas", null, onClick = { navigate(Routes.HIDDEN) }, testTag = "hidden_apps") }
         item(key = "restore") { SettingRow("Restaurar clasificación automática", "Elimina todas las asignaciones manuales", onClick = { confirmRestore = true }, testTag = "restore_auto") }
+
+        section("Uso de apps")
+        item(key = "learnUsage") {
+            SwitchRow("Aprender de las apps que abro", "Para Frecuentes y Sugeridas. Se guarda solo en este dispositivo.", s.learnUsage, "learn_usage") {
+                scope.launch { prefs.setLearnUsage(it) }
+            }
+        }
+        item(key = "clearUsage") { SettingRow("Borrar historial de uso", null, onClick = { confirmClearUsage = true }, testTag = "clear_usage") }
 
         section("Widgets")
         item(key = "widgets") { SettingRow("Widgets en la pantalla de inicio", "Ver y quitar widgets", onClick = { navigate(Routes.WIDGETS) }, testTag = "widgets_settings") }
@@ -269,23 +215,9 @@ private fun MainSettings(
     if (categoryColsDialog) ColumnsDialog("Columnas de categorías", s.categoryColumns, 2..6, onDismiss = { categoryColsDialog = false }) {
         categoryColsDialog = false; scope.launch { prefs.setCategoryColumns(it) }
     }
-    if (sortDialog) {
-        AlertDialog(
-            onDismissRequest = { sortDialog = false },
-            title = { Text("Orden de apps") },
-            text = {
-                Column {
-                    AppSort.entries.forEach { sort ->
-                        Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable {
-                                sortDialog = false; scope.launch { prefs.setAppSort(sort) }
-                            }.padding(12.dp),
-                        ) { Text((if (sort == s.appSort) "● " else "○ ") + sortLabel(sort)) }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { sortDialog = false }) { Text("Cerrar") } },
-        )
+    if (confirmClearUsage) {
+        ConfirmDialog("¿Borrar historial de uso?", "Frecuentes y Sugeridas empezarán de cero. Las apps fijadas se conservan.", "Borrar",
+            onDismiss = { confirmClearUsage = false }) { scope.launch { container.usage.clear() } }
     }
     if (confirmRestore) {
         AlertDialog(

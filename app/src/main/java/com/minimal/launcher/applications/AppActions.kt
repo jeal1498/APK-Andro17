@@ -14,12 +14,17 @@ import android.util.Log
 import android.widget.Toast
 
 /** Thin wrapper over the official launcher APIs for launching apps / shortcuts and opening system screens. */
-class AppActions(private val context: Context) {
+class AppActions(
+    private val context: Context,
+    /** Called after every successful app launch (usage learning). */
+    private val onLaunched: (AppInfo) -> Unit = {},
+) {
     private val launcherApps = context.getSystemService(LauncherApps::class.java)
 
     fun launch(app: AppInfo, bounds: Rect? = null, options: Bundle? = null) {
         try {
             launcherApps.startMainActivity(app.component, app.user, bounds, options)
+            onLaunched(app)
         } catch (e: Exception) {
             Log.w(TAG, "Cannot launch ${app.key}", e)
             toast("No se pudo abrir ${app.label}")

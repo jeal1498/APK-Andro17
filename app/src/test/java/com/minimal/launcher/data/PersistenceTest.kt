@@ -261,4 +261,50 @@ class PersistenceTest {
         assertEquals(TYPE_APP, db.homeDao().itemsIn(CONTAINER_FOLDER, folder).first().type)
         db.close()
     }
+
+    /** Builds a real v1 database from the exported schema, then lets Room migrate it to the current version. */
+    @Test fun migrationFromV1KeepsDataAndAddsUsageAndPairs() = runBlocking {
+        val schema = org.json.JSONObject(File("schemas/com.minimal.launcher.data.db.LauncherDatabase/1.json").readText()).getJSONObject("database")
+        val file = context.getDatabasePath(dbName).apply { parentFile?.mkdirs() }
+        android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(file, null).use { raw ->
+            val entities = schema.getJSONArray("entities")
+            for (i in 0 until entities.length()) {
+                val e = entities.getJSONObject(i)
+                val table = e.getString("tableName")
+                raw.execSQL(e.getString("createSql").replace("\${TABLE_NAME}", table))
+                val indices = e.optJSONArray("indices") ?: continue
+                for (j in 0 until indices.length()) raw.execSQL(indices.getJSONObject(j).getString("createSql").replace("\${TABLE_NAME}", table))
+            }
+            val setup = schema.getJSONArray("setupQueries")
+            for (i in 0 until setup.length()) raw.execSQL(setup.getString(i))
+            raw.execSQL("INSERT INTO categories (id, name, iconKey, position, builtinKey, keywords) VALUES (7, 'Conducción', 'driving', 0, 'driving', '')")
+            raw.execSQL("INSERT INTO hidden_apps (appKey) VALUES ('secret/.Main#0')")
+            raw.execSQL("INSERT INTO home_items (container, containerId, x, y, spanX, spanY, type, appKey, userSerial) VALUES (1, 0, 2, 0, 1, 1, 0, 'dock/.Main#0', 0)")
+            raw.version = 1
+        }
+
+        val db = openDb()
+        assertEquals("Conducción", db.categoryDao().getAll().single().name)
+        assertEquals(listOf("secret/.Main#0"), db.hiddenAppDao().observe().first())
+        assertEquals("dock/.Main#0", db.homeDao().getAll().single().appKey)
+
+        val usage = db.usageDao()
+        usage.record("uber/.Main#0", slot = 2, day = 3, now = 100)
+        usage.record("uber/.Main#0", slot = 2, day = 3, now = 200)
+        usage.record("uber/.Main#0", slot = 4, day = 3, now = 300)
+        val rows = usage.getAll().sortedBy { it.timeSlot }
+        assertEquals(listOf(2, 1), rows.map { it.count })
+        assertEquals(200L, rows.first().lastOpened)
+
+        val pairs = db.pairDao()
+        val id = pairs.insert(com.minimal.launcher.data.db.AppPairEntity(apps = com.minimal.launcher.data.db.AppPairEntity.encode(listOf("uber/.Main#0", "didi/.Main#0")), categoryId = 7))
+        assertEquals(listOf("uber/.Main#0", "didi/.Main#0"), pairs.get(id)!!.appKeys)
+        db.close()
+
+        // Survives a restart.
+        val reopened = openDb()
+        assertEquals(2, reopened.usageDao().getAll().size)
+        assertEquals(1, reopened.pairDao().getAll().size)
+        reopened.close()
+    }
 }

@@ -11,6 +11,7 @@ import com.minimal.launcher.data.db.HiddenAppDao
 import com.minimal.launcher.data.db.LauncherDatabase
 import com.minimal.launcher.data.prefs.SettingsRepository
 import com.minimal.launcher.home.HomeRepository
+import com.minimal.launcher.usage.UsageRepository
 import com.minimal.launcher.widgets.WidgetManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,7 +26,6 @@ class AppContainer(context: Context) {
     val settings = SettingsRepository(appContext)
     val apps = AppRepository(appContext, scope)
     val icons = IconCache(appContext, apps)
-    val actions = AppActions(appContext)
     val categories = CategoryRepository(
         database.categoryDao(),
         database.assignmentDao(),
@@ -36,6 +36,8 @@ class AppContainer(context: Context) {
     )
     val hiddenApps: HiddenAppDao = database.hiddenAppDao()
     val home = HomeRepository(database, settings)
+    val usage = UsageRepository(database.usageDao(), scope, enabled = { settings.current().learnUsage })
+    val actions = AppActions(appContext, onLaunched = { usage.record(it.key) })
     val widgets = WidgetManager(appContext)
 
     fun start() {
@@ -50,6 +52,7 @@ class AppContainer(context: Context) {
                     val keys = home.allItems().mapNotNull { it.appKey }
                         .filter { it.startsWith("$pkg/") && it.endsWith("#$serial") }
                     home.removeApps(keys, pkg, serial)
+                    usage.forget(database.usageDao().getAll().map { it.appKey }.distinct().filter { it.startsWith("$pkg/") && it.endsWith("#$serial") })
                     icons.invalidatePackage(pkg)
                 }
             }

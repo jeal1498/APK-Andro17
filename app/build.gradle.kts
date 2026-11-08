@@ -38,6 +38,8 @@ android {
                 it.maxHeapSize = "3g"
                 // Fresh JVM per test class: avoids static state leaking between Robolectric UI tests.
                 it.forkEvery = 1
+                // Robolectric downloads android-all from Maven Central; Google's mirror avoids its rate limits.
+                it.systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2/")
                 // Robolectric needs reflective access to JDK internals on JDK 17+.
                 it.jvmArgs("--add-opens=java.base/java.io=ALL-UNNAMED", "--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED", "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
             }

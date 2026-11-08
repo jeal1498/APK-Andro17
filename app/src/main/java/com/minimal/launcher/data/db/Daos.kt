@@ -157,3 +157,53 @@ interface HomeDao {
     @Query("SELECT * FROM home_items WHERE type = 3 AND packageName IN (:packages)")
     suspend fun shortcutsForPackages(packages: List<String>): List<HomeItemEntity>
 }
+
+@Dao
+interface UsageDao {
+    @Query("SELECT * FROM app_usage")
+    fun observeAll(): Flow<List<AppUsageEntity>>
+
+    @Query("SELECT * FROM app_usage")
+    suspend fun getAll(): List<AppUsageEntity>
+
+    @Query("UPDATE app_usage SET count = count + 1, lastOpened = :now WHERE appKey = :appKey AND timeSlot = :slot AND dayOfWeek = :day")
+    suspend fun increment(appKey: String, slot: Int, day: Int, now: Long): Int
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(usage: AppUsageEntity)
+
+    @Transaction
+    suspend fun record(appKey: String, slot: Int, day: Int, now: Long) {
+        if (increment(appKey, slot, day, now) == 0) insert(AppUsageEntity(appKey, slot, day, 1, now))
+    }
+
+    @Query("DELETE FROM app_usage WHERE appKey IN (:keys)")
+    suspend fun deleteForApps(keys: List<String>)
+
+    @Query("DELETE FROM app_usage")
+    suspend fun clear()
+}
+
+@Dao
+interface PairDao {
+    @Query("SELECT * FROM app_pairs ORDER BY position, id")
+    fun observeAll(): Flow<List<AppPairEntity>>
+
+    @Query("SELECT * FROM app_pairs ORDER BY position, id")
+    suspend fun getAll(): List<AppPairEntity>
+
+    @Query("SELECT * FROM app_pairs WHERE id = :id")
+    suspend fun get(id: Long): AppPairEntity?
+
+    @Query("SELECT COALESCE(MAX(position), -1) + 1 FROM app_pairs")
+    suspend fun nextPosition(): Int
+
+    @Insert
+    suspend fun insert(pair: AppPairEntity): Long
+
+    @Update
+    suspend fun update(pair: AppPairEntity)
+
+    @Query("DELETE FROM app_pairs WHERE id = :id")
+    suspend fun delete(id: Long)
+}
