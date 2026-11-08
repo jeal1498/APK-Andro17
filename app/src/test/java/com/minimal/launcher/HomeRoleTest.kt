@@ -36,8 +36,13 @@ class HomeRoleTest {
     @Test fun onlyMinimalPermissionsAreRequested() {
         val info = pm.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
         val requested = info.requestedPermissions.orEmpty().toSet()
+        // Each one is justified in the manifest; none of them is QUERY_ALL_PACKAGES or a location/storage permission.
+        val allowed = setOf(
+            "android.permission.REQUEST_DELETE_PACKAGES",
+            "android.permission.EXPAND_STATUS_BAR",
+        )
         assertTrue("Unexpected permissions: $requested", requested.all {
-            it == "android.permission.REQUEST_DELETE_PACKAGES" || it.endsWith(".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
+            it in allowed || it.endsWith(".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
         })
         assertTrue("QUERY_ALL_PACKAGES must not be used", "android.permission.QUERY_ALL_PACKAGES" !in requested)
     }

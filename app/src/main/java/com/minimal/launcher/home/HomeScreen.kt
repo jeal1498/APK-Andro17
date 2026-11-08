@@ -100,6 +100,12 @@ import com.minimal.launcher.widgets.WidgetPickerSheet
 import com.minimal.launcher.data.prefs.FrequentPosition
 import com.minimal.launcher.ui.components.AppRow
 import com.minimal.launcher.usage.FrequentPlacement
+import com.minimal.launcher.gestures.GestureAction
+import com.minimal.launcher.gestures.HomeGesture
+import com.minimal.launcher.gestures.SystemZones
+import com.minimal.launcher.gestures.detectHomeGestures
+import androidx.compose.foundation.layout.systemGestures
+import androidx.compose.ui.platform.LocalLayoutDirection
 import com.minimal.launcher.pairs.AccessibilityDialog
 import com.minimal.launcher.pairs.LauncherAccessibilityService
 import com.minimal.launcher.pairs.PairPickerDialog
@@ -308,6 +314,34 @@ fun HomeScreen(
         }
     }
 
+    val systemGestures = WindowInsets.systemGestures
+    val layoutDirection = LocalLayoutDirection.current
+    val currentZones = SystemZones(
+        systemGestures.getLeft(density, layoutDirection).toFloat(),
+        systemGestures.getRight(density, layoutDirection).toFloat(),
+        systemGestures.getBottom(density).toFloat(),
+    )
+    val currentSettings by rememberUpdatedState(settings)
+
+    fun performGesture(g: HomeGesture, page: Int = pagerState.currentPage, at: Offset? = null) {
+        val action = settings.gesture(g)
+        val system = vm.container.systemActions
+        when (action.type) {
+            GestureAction.Type.NONE -> Unit
+            GestureAction.Type.DRAWER -> openDrawer()
+            GestureAction.Type.SEARCH -> openDrawer(search = true)
+            GestureAction.Type.NOTIFICATIONS -> if (!system.openNotifications()) vm.requestAccessibility()
+            GestureAction.Type.QUICK_SETTINGS -> if (!system.openNotifications(quickSettings = true)) vm.requestAccessibility()
+            GestureAction.Type.EDIT_MODE -> { menu = null; editMode = true }
+            GestureAction.Type.HOME_MENU -> menu = HomeMenu.Background(page, at ?: Offset(view.width / 3f, view.height / 3f))
+            GestureAction.Type.FLASHLIGHT -> system.toggleFlashlight()
+            GestureAction.Type.SCREEN_OFF -> if (!system.screenOff()) vm.requestAccessibility()
+            GestureAction.Type.APP -> vm.findApp(action.target)?.let { vm.launch(it) }
+            GestureAction.Type.PAIR -> vm.pairs.value.firstOrNull { it.id.toString() == action.target }?.let { vm.launchPair(it) }
+        }
+    }
+    var lastBackgroundTap by remember { mutableStateOf(0L) }
+
     val cellCallbacks = object : CellCallbacks {
         override fun onItemTap(item: HomeItemEntity, localInItem: Offset, itemSize: IntSize) {
             menu = null
@@ -321,11 +355,19 @@ fun HomeScreen(
         }
         override fun onBackgroundLongPress(page: Int, local: Offset) {
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-            menu = HomeMenu.Background(page, local)
+            performGesture(HomeGesture.LONG_PRESS, page, local)
         }
         override fun onBackgroundTap() {
+            val hadOverlay = menu != null || resizingId != null
             menu = null
             resizingId = null
+            val now = android.os.SystemClock.uptimeMillis()
+            if (!hadOverlay && now - lastBackgroundTap < 350L) {
+                lastBackgroundTap = 0L
+                performGesture(HomeGesture.DOUBLE_TAP)
+            } else {
+                lastBackgroundTap = now
+            }
         }
         override fun onDrag(delta: Offset) = drag.moveBy(delta, thresholdPx)
         override fun onDragEnd(cancelled: Boolean) = onDrop(cancelled)
@@ -459,7 +501,6 @@ fun HomeScreen(
 
     Box(Modifier.fillMaxSize()) {
         // ---------------- Home content ----------------
-        val velocity = remember { VelocityTracker() }
         val progressValue = drawerProgress.value
         Box(
             Modifier
@@ -471,20 +512,18 @@ fun HomeScreen(
                 }
                 .pointerInput(Unit) {
                     val heightPx = size.height.toFloat()
-                    detectVerticalDragGestures(
-                        onDragStart = { velocity.resetTracking() },
-                        onDragEnd = {
-                            val v = velocity.calculateVelocity().y
-                            if (drawerProgress.value > 0.25f || v < -800f) openDrawer() else closeDrawer()
+                    detectHomeGestures(
+                        enabled = { !drag.isDragging },
+                        zones = { currentZones },
+                        liveDrawer = { currentSettings.gesture(HomeGesture.SWIPE_UP).type == GestureAction.Type.DRAWER },
+                        canScroll = { pagerState.canScrollBackward to pagerState.canScrollForward },
+                        onDrawerDrag = { dy ->
+                            menu = null
+                            scope.launch { drawerProgress.snapTo((drawerProgress.value - dy / (heightPx * 0.6f)).coerceIn(0f, 1f)) }
                         },
-                        onDragCancel = { closeDrawer() },
-                    ) { change, dy ->
-                        if (drag.isDragging) return@detectVerticalDragGestures
-                        change.consume()
-                        velocity.addPosition(change.uptimeMillis, change.position)
-                        menu = null
-                        scope.launch { drawerProgress.snapTo((drawerProgress.value - dy / (heightPx * 0.6f)).coerceIn(0f, 1f)) }
-                    }
+                        onDrawerRelease = { v -> if (drawerProgress.value > 0.25f || v < -800f) openDrawer() else closeDrawer() },
+                        onGesture = { performGesture(it) },
+                    )
                 }
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {

@@ -4,6 +4,8 @@
 
     <!-- Needed only to open the system uninstall dialog (ACTION_DELETE) from the app menu. -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Gesture "open notifications" when the accessibility service is off (normal permission, no prompt). -->
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
 
     <!--
         Package visibility (Android 11+): declare only what the launcher needs instead of

@@ -88,6 +88,7 @@ object Routes {
     const val HIDDEN = "hidden"
     const val WIDGETS = "widgets"
     const val ABOUT = "about"
+    const val GESTURES = "gestures"
 }
 
 @Composable
@@ -107,6 +108,7 @@ fun SettingsNavHost(
         composable(Routes.CATEGORIES) { CategoriesSettings(container, scope, onBack = { nav.popBackStack() }) }
         composable(Routes.HIDDEN) { HiddenAppsSettings(container, scope, onBack = { nav.popBackStack() }) }
         composable(Routes.WIDGETS) { WidgetsSettings(container, scope, onBack = { nav.popBackStack() }) }
+        composable(Routes.GESTURES) { GesturesSettings(settings, container, scope, onBack = { nav.popBackStack() }) }
         composable(Routes.ABOUT) { AboutScreen(isDefaultLauncher, onRequestDefault, onBack = { nav.popBackStack() }) }
     }
 }
@@ -185,6 +187,9 @@ private fun MainSettings(
         item(key = "cats") { SettingRow("Categorías", "Crear, editar, ordenar y eliminar", onClick = { navigate(Routes.CATEGORIES) }, testTag = "manage_categories") }
         item(key = "hidden") { SettingRow("Apps ocultas", null, onClick = { navigate(Routes.HIDDEN) }, testTag = "hidden_apps") }
         item(key = "restore") { SettingRow("Restaurar clasificación automática", "Elimina todas las asignaciones manuales", onClick = { confirmRestore = true }, testTag = "restore_auto") }
+
+        section("Gestos")
+        item(key = "gestures") { SettingRow("Gestos en la pantalla de inicio", "Deslizar, doble toque, pellizcar, dos dedos…", onClick = { navigate(Routes.GESTURES) }, testTag = "gestures_settings") }
 
         section("Frecuentes")
         item(key = "frequentPos") {

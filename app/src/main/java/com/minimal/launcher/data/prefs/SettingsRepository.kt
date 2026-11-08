@@ -12,6 +12,8 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import com.minimal.launcher.gestures.GestureAction
+import com.minimal.launcher.gestures.HomeGesture
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 enum class AppSort { ALPHABETICAL, ALPHABETICAL_DESC, RECENTLY_INSTALLED }
@@ -43,7 +45,10 @@ data class LauncherSettings(
     val pinnedFrequent: List<String> = emptyList(),
     /** The guided accessibility dialog is shown only once. */
     val accessibilityPrompted: Boolean = false,
-)
+    val gestures: Map<HomeGesture, GestureAction> = HomeGesture.entries.associateWith { GestureAction.defaultFor(it) },
+) {
+    fun gesture(g: HomeGesture): GestureAction = gestures[g] ?: GestureAction.defaultFor(g)
+}
 
 
 class SettingsRepository(private val store: DataStore<Preferences>) {
@@ -100,9 +105,13 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             frequentPosition = p[Keys.frequentPosition]?.let { runCatching { FrequentPosition.valueOf(it) }.getOrNull() } ?: FrequentPosition.TOP,
             frequentCount = (p[Keys.frequentCount] ?: 5).coerceIn(5, 8),
             accessibilityPrompted = p[Keys.a11yPrompted] ?: false,
+            gestures = HomeGesture.entries.associateWith { g -> GestureAction.decode(p[gestureKey(g)]) ?: GestureAction.defaultFor(g) },
             pinnedFrequent = p[Keys.pinnedFrequent].orEmpty().split('\n').filter { it.isNotEmpty() },
         )
     }
+
+    private fun gestureKey(g: HomeGesture) = stringPreferencesKey("gesture_${g.name}")
+    suspend fun setGesture(g: HomeGesture, action: GestureAction) = store.edit { it[gestureKey(g)] = action.encode() }
 
     suspend fun current(): LauncherSettings = settings.first()
 
