@@ -9,6 +9,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.onFirst
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -74,5 +76,33 @@ class GestureUiTest : FeatureUiBase() {
         compose.onNodeWithTag("edit_done").performClick()
         compose.onNodeWithTag("home").performTouchInput { swipeDown(startY = centerY - 400f, endY = centerY + 200f) }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("drawer").fetchSemanticsNodes().isNotEmpty() }
+    }
+}
+
+@OptIn(ExperimentalTestApi::class)
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(qualifiers = "w411dp-h891dp-port-xxhdpi")
+class HiddenAppsUiTest : FeatureUiBase() {
+    @Test fun hiddenAppsLeaveSearchAndFrequentAndOpenFromTheLockedList() {
+        launch()
+        val key = keyOf("com.whatsapp")
+        repeat(3) { app.container.usage.record(key) }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("frequent_home").fetchSemanticsNodes().isNotEmpty() }
+        kotlinx.coroutines.runBlocking { app.container.hiddenApps.hide(com.minimal.launcher.data.db.HiddenAppEntity(key)) }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("frequent_home").fetchSemanticsNodes().isEmpty() }
+
+        compose.onNodeWithTag("home").performTouchInput { swipeUp() }
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("drawer").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("drawer_search").performTextInput("whats")
+        compose.onNodeWithText("No se encontraron apps", substring = true).fetchSemanticsNode()
+        compose.onNodeWithTag("drawer_search").performTextClearance()
+
+        compose.onNodeWithTag("drawer_more").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("menu_hidden_apps").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("menu_hidden_apps").performClick()
+        // Robolectric has no screen lock, so the check passes straight away.
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("hidden_apps_dialog").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodes(whatsapp).onFirst().fetchSemanticsNode()
     }
 }

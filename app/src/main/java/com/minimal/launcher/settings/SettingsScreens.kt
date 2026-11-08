@@ -76,6 +76,8 @@ import com.minimal.launcher.data.prefs.FrequentPosition
 import com.minimal.launcher.data.prefs.LauncherSettings
 import com.minimal.launcher.data.prefs.ThemeMode
 import com.minimal.launcher.drawer.CategoryEditorDialog
+import com.minimal.launcher.security.Authenticator
+import androidx.compose.runtime.LaunchedEffect
 import com.minimal.launcher.ui.components.AppIconImage
 import com.minimal.launcher.ui.components.CategoryIcons
 import kotlinx.coroutines.CoroutineScope
@@ -387,14 +389,27 @@ private fun CategoriesSettings(container: AppContainer, scope: CoroutineScope, o
 private fun HiddenAppsSettings(container: AppContainer, scope: CoroutineScope, onBack: () -> Unit) {
     val apps by container.apps.apps.collectAsState()
     val hidden by container.hiddenApps.observe().collectAsState(initial = emptyList())
+    val settings by container.settings.settings.collectAsState(initial = null)
+    val s = settings ?: return
+    val context = LocalContext.current
+    // Locked until the user verifies (only when protection is on and there is something hidden).
+    var unlocked by remember { mutableStateOf(false) }
+    val locked = s.lockHiddenApps && hidden.isNotEmpty() && !unlocked
+    LaunchedEffect(locked) { if (locked) Authenticator.authenticate(context, "Ver apps ocultas") { unlocked = true } }
     val hiddenSet = hidden.toSet()
     SettingsScaffold("Apps ocultas", onBack, "settings_hidden") {
-        item(key = "info") {
-            Text(
-                "Las apps ocultas no aparecen en el cajón ni en la búsqueda. Siguen instaladas.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp),
-            )
+        note("info", "Las apps ocultas no aparecen en el cajón, la búsqueda, Frecuentes ni Sugeridas. Siguen instaladas. Se pueden abrir desde el menú ⋮ del cajón › «Apps ocultas».")
+        item(key = "lock") {
+            SwitchRow("Proteger con huella", "Pide huella o el bloqueo de pantalla para verlas", s.lockHiddenApps, "lock_hidden") { on ->
+                if (on) scope.launch { container.settings.setLockHiddenApps(true) }
+                else Authenticator.authenticate(context, "Quitar protección") { scope.launch { container.settings.setLockHiddenApps(false) } }
+            }
+        }
+        if (locked) {
+            item(key = "locked") {
+                SettingRow("Contenido bloqueado", "Toca para desbloquear", onClick = { Authenticator.authenticate(context, "Ver apps ocultas") { unlocked = true } }, testTag = "unlock_hidden")
+            }
+            return@SettingsScaffold
         }
         items(apps, key = { it.key }) { app ->
             val isHidden = app.key in hiddenSet

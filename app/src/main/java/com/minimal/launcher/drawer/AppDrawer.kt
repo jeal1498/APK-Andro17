@@ -116,6 +116,7 @@ import com.minimal.launcher.data.prefs.AppSort
 import com.minimal.launcher.data.prefs.DrawerTab
 import com.minimal.launcher.data.prefs.LauncherSettings
 import com.minimal.launcher.search.AppSearch
+import com.minimal.launcher.security.Authenticator
 import com.minimal.launcher.search.Contact
 import com.minimal.launcher.search.ContactsSearch
 import com.minimal.launcher.search.UniversalSearch
@@ -168,6 +169,8 @@ fun AppDrawer(
     var creating by remember { mutableStateOf(false) }
     var addingTo by remember { mutableStateOf<CategoryWithApps?>(null) }
     var pairFor by remember { mutableStateOf<AppInfo?>(null) }
+    var showHidden by remember { mutableStateOf(false) }
+    val hiddenSet by vm.hidden.collectAsState()
     var movingPair by remember { mutableStateOf<AppPair?>(null) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -276,6 +279,9 @@ fun AppDrawer(
                 onSort = vm::setAppSort,
                 onSettings = { actions.startIntent(android.content.Intent(vm.getApplication(), com.minimal.launcher.settings.SettingsActivity::class.java)) },
                 onCreateCategory = { creating = true },
+                onHiddenApps = if (hiddenSet.isNotEmpty()) { {
+                    if (settings.lockHiddenApps) Authenticator.authenticate(context, "Ver apps ocultas") { showHidden = true } else showHidden = true
+                } } else null,
             )
             val menuFor: (AppInfo, CategoryWithApps?) -> List<MenuAction> = { app, inCategory ->
                 buildList {
@@ -446,6 +452,15 @@ fun AppDrawer(
             onSave = { n, i, k -> vm.createCategory(n, i, k); creating = false },
         )
     }
+    if (showHidden) {
+        val hiddenApps = vm.allApps.collectAsState().value.filter { it.key in hiddenSet }
+        HiddenAppsDialog(
+            apps = hiddenApps,
+            onDismiss = { showHidden = false },
+            onLaunch = { showHidden = false; vm.launch(it) },
+            onUnhide = { vm.unhideApp(it.key) },
+        )
+    }
     pairFor?.let { first ->
         PairPickerDialog(first, apps, onDismiss = { pairFor = null }) { keys -> pairFor = null; vm.createPair(keys) }
     }
@@ -473,6 +488,7 @@ private fun SearchRow(
     onSort: (AppSort) -> Unit,
     onSettings: () -> Unit,
     onCreateCategory: () -> Unit,
+    onHiddenApps: (() -> Unit)? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -512,6 +528,9 @@ private fun SearchRow(
                     )
                 }
                 DropdownMenuItem(text = { Text("Nueva categoría") }, leadingIcon = { Icon(Icons.Outlined.Add, null) }, onClick = { menu = false; onCreateCategory() })
+                if (onHiddenApps != null) {
+                    DropdownMenuItem(text = { Text("Apps ocultas") }, leadingIcon = { Icon(Icons.Outlined.VisibilityOff, null) }, onClick = { menu = false; onHiddenApps() }, modifier = Modifier.testTag("menu_hidden_apps"))
+                }
                 DropdownMenuItem(text = { Text("Ajustes") }, leadingIcon = { Icon(Icons.Outlined.Settings, null) }, onClick = { menu = false; onSettings() })
             }
         }
@@ -812,3 +831,29 @@ private fun CategoryDetail(
     }
 }
 
+/** Hidden apps, shown only after unlocking. */
+@Composable
+private fun HiddenAppsDialog(apps: List<AppInfo>, onDismiss: () -> Unit, onLaunch: (AppInfo) -> Unit, onUnhide: (AppInfo) -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("hidden_apps_dialog"),
+        title = { Text("Apps ocultas") },
+        text = {
+            if (apps.isEmpty()) Text("No hay apps ocultas")
+            LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                listItems(apps, key = { it.key }) { app ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onLaunch(app) }.padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppIconImage(app.key, 36.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Text(app.label, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        androidx.compose.material3.TextButton(onClick = { onUnhide(app) }) { Text("Mostrar") }
+                    }
+                }
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cerrar") } },
+    )
+}
