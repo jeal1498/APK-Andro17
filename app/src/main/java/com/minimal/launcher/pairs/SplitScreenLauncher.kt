@@ -44,7 +44,13 @@ class SplitScreenLauncher(
         val third = pair.apps.getOrNull(2)
         scope.launch(Dispatchers.Main) {
             actions.launch(a)
-            delay(FOCUS_MS) // let app A come to the foreground and take focus
+            // The split action applies to the focused task: wait until app A (not this launcher) has focus.
+            var waited = 0L
+            while (waited < FOCUS_TIMEOUT_MS && service.focusedPackage() != a.packageName) {
+                delay(POLL_MS)
+                waited += POLL_MS
+            }
+            delay(POLL_MS)
             var active = service.isSplitScreenActive() == true
             var attempt = 0
             while (!active && attempt < 3) {
@@ -126,6 +132,8 @@ class SplitScreenLauncher(
         const val TAG = "SplitScreenLauncher"
         const val STEP_MS = 650L
         const val FOCUS_MS = 1000L
+        const val POLL_MS = 150L
+        const val FOCUS_TIMEOUT_MS = 4000L
         const val CHECK_MS = 1200L
     }
 }

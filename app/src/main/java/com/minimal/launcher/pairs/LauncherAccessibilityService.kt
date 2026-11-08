@@ -41,6 +41,12 @@ class LauncherAccessibilityService : AccessibilityService() {
 
     fun openQuickSettings(): Boolean = performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
 
+    /** Package of the window that currently has input focus (null if unknown). */
+    fun focusedPackage(): String? = runCatching {
+        val w = windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && (it.isFocused || it.isActive) }
+        w?.root?.packageName?.toString()
+    }.getOrNull()
+
     /** True only when the system split-screen divider window exists (floating windows don't count). */
     fun isSplitScreenActive(): Boolean? = runCatching {
         windows.any { it.type == AccessibilityWindowInfo.TYPE_SPLIT_SCREEN_DIVIDER }
