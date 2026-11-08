@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home layout references device-specific widget ids, so only preferences/categories are backed up. -->
+<full-backup-content>
+    <exclude domain="database" path="launcher.db" />
+    <exclude domain="database" path="launcher.db-wal" />
+    <exclude domain="database" path="launcher.db-shm" />
+</full-backup-content>
